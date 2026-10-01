@@ -17,9 +17,9 @@ Rules (enforced by ``validate``):
 
 Usage (Python 3.9+, stdlib only)::
 
-    python scene_studio_profile.py validate        --profile my.profile.json
-    python scene_studio_profile.py resolve         --profile my.profile.json   # JSON summary
-    python scene_studio_profile.py render-apps-yaml --profile my.profile.json  # apps.yaml block + notes
+    python scene-studio-profile.py validate        --profile my.profile.json
+    python scene-studio-profile.py resolve         --profile my.profile.json   # JSON summary
+    python scene-studio-profile.py render-apps-yaml --profile my.profile.json  # apps.yaml block + notes
 """
 
 from __future__ import annotations

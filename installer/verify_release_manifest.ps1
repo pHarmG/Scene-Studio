@@ -1,26 +1,26 @@
 <#
 .SYNOPSIS
-  Verify a Scene Studio portable bundle against its MANIFEST.sha256.
+  Verify a Scene Studio release tree against its MANIFEST.sha256.
 
 .DESCRIPTION
-  Fails BEFORE any remote contact when the bundle has been changed, lost a
+  Fails BEFORE any remote contact when the tree has been changed, lost a
   file, or gained an unlisted payload: every manifest line must match an
   existing file byte-for-byte (SHA-256 + size), and every file under the
-  bundle root (except the manifest itself) must be listed. Exits 0 only for
-  a byte-exact bundle.
+  release root (except the manifest itself) must be listed. Exits 0 only for
+  a byte-exact release tree.
 #>
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][string]$BundleRoot
+    [Parameter(Mandatory = $true)][string]$ReleaseRoot
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$manifestPath = Join-Path $BundleRoot 'MANIFEST.sha256'
+$manifestPath = Join-Path $ReleaseRoot 'MANIFEST.sha256'
 if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
-    throw "Bundle manifest missing: $manifestPath"
+    throw "Release manifest missing: $manifestPath"
 }
 
 $expected = @{}
@@ -42,7 +42,7 @@ foreach ($rawLine in Get-Content -LiteralPath $manifestPath) {
     $expected[$parts[2]] = @{ Sha256 = $hash; Size = [long]$parts[1] }
 }
 if ($expected.Count -eq 0) {
-    throw "Bundle manifest lists no files: $manifestPath"
+    throw "Release manifest lists no files: $manifestPath"
 }
 
 # 1. every manifest entry matches an existing file, byte for byte.
@@ -50,9 +50,9 @@ foreach ($entry in $expected.Keys) {
     if ($entry -match '(^|/)\.\.(/|$)' -or [System.IO.Path]::IsPathRooted($entry)) {
         throw "Unsafe manifest path: $entry"
     }
-    $path = Join-Path $BundleRoot ($entry -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+    $path = Join-Path $ReleaseRoot ($entry -replace '/', [System.IO.Path]::DirectorySeparatorChar)
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-        throw "Manifest file missing from bundle: $entry"
+        throw "Manifest file missing from release tree: $entry"
     }
     $file = Get-Item -LiteralPath $path
     if ($file.Length -ne $expected[$entry].Size) {
@@ -64,19 +64,19 @@ foreach ($entry in $expected.Keys) {
     }
 }
 
-# 2. no unlisted payload: everything under the bundle root must be listed.
+# 2. no unlisted payload: everything under the release root must be listed.
 # (Every MANIFEST.sha256 in the tree is verification metadata, not payload.)
 $unlisted = @()
-foreach ($file in Get-ChildItem -LiteralPath $BundleRoot -Recurse -File) {
-    $relative = $file.FullName.Substring($BundleRoot.TrimEnd('\', '/').Length + 1).Replace('\', '/')
+foreach ($file in Get-ChildItem -LiteralPath $ReleaseRoot -Recurse -File) {
+    $relative = $file.FullName.Substring($ReleaseRoot.TrimEnd('\', '/').Length + 1).Replace('\', '/')
     if ($relative.EndsWith('MANIFEST.sha256')) { continue }
     if (-not $expected.ContainsKey($relative)) {
         $unlisted += $relative
     }
 }
 if ($unlisted.Count -gt 0) {
-    throw ("Bundle contains files not listed in MANIFEST.sha256: " + ($unlisted -join '; '))
+    throw ("Release tree contains files not listed in MANIFEST.sha256: " + ($unlisted -join '; '))
 }
 
-Write-Host "Bundle manifest verified: $($expected.Count) files byte-exact, no unlisted payload."
+Write-Host "Release manifest verified: $($expected.Count) files byte-exact, no unlisted payload."
 exit 0

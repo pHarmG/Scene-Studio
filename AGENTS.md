@@ -60,7 +60,7 @@ python scripts/security/scan_secrets.py
 ## Installer architecture
 
 - `Install-SceneStudio.ps1` (wizard): asks plain questions, probes read-only,
-  shows a review, then drives `installer/install_scene_studio.ps1` and the
+  shows a review, then drives `installer/deploy_scene_studio.ps1` and the
   two deployers. Models **three independent endpoints**: HA API URL, AppDaemon
   ssh target, and the Scene Studio/AppDaemon HTTP endpoint (inferred from the
   ssh target + port 5050, tested, asked only when inference fails). HA Core
@@ -72,10 +72,10 @@ python scripts/security/scan_secrets.py
   modifies a dashboard).
 - Fresh installs must come up in `registry_admin` (provider writes blocked);
   upgrades preserve the live runtime mode.
-- Deployment profiles are validated by `installer/scene_studio_profile.py`
+- Deployment profiles are validated by `installer/scene-studio-profile.py`
   (validate / resolve / render-apps-yaml). Secrets stay NAMES there, never
   values.
-- `installer/verify_bundle_manifest.ps1` gates release trees byte-exactly.
+- `installer/verify_release_manifest.ps1` gates release trees byte-exactly.
 
 ## Deployment safety rules
 

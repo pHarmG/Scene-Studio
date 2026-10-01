@@ -16,8 +16,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_ROOT = REPO_ROOT / "backend"
 sys.path.insert(0, str(SRC_ROOT / "src"))
 
-PROFILE_PY = REPO_ROOT / "installer" / "scene_studio_profile.py"
-EXAMPLE = REPO_ROOT / "installer" / "scene-studio.profile.example.json"
+PROFILE_PY = REPO_ROOT / "installer" / "scene-studio-profile.py"
+EXAMPLE = REPO_ROOT / "installer" / "scene-studio-profile.example.json"
 
 
 def _module():

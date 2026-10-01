@@ -60,7 +60,7 @@ every file with its SHA-256.
 
 ## 1. Create your deployment profile
 
-Copy `packaging/scene_studio/scene-studio.profile.example.json` to e.g.
+Copy `installer/scene-studio-profile.example.json` to e.g.
 `my.profile.json` (keep it OUT of the bundle) and fill in your values:
 
 - `ha_url` — your Home Assistant URL.
@@ -81,7 +81,7 @@ Validate it (fails loudly on unknown keys, placeholder values, or credential-
 shaped values — the profile holds secret NAMES, never secret values):
 
 ```powershell
-python packaging/scene_studio/scene_studio_profile.py validate --profile my.profile.json
+python installer/scene-studio-profile.py validate --profile my.profile.json
 ```
 
 ---
@@ -89,7 +89,7 @@ python packaging/scene_studio/scene_studio_profile.py validate --profile my.prof
 ## 2. Preflight (read-only)
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File packaging/scene_studio/install_scene_studio.ps1 -Profile my.profile.json
+pwsh -NoProfile -ExecutionPolicy Bypass -File installer/deploy_scene_studio.ps1 -Profile my.profile.json
 ```
 
 This validates the profile, prints the resolved deployment targets, prints
@@ -116,7 +116,7 @@ yours, in your hands, reviewable before any restart.)
 
 ```powershell
 $env:SCENE_STUDIO_HA_TOKEN = "<long-lived HA token>"
-pwsh -NoProfile -ExecutionPolicy Bypass -File packaging/scene_studio/install_scene_studio.ps1 -Profile my.profile.json -Apply
+pwsh -NoProfile -ExecutionPolicy Bypass -File installer/deploy_scene_studio.ps1 -Profile my.profile.json -Apply
 ```
 
 - The backend deployer backs up the previous Python package (if any), stages

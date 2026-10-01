@@ -69,7 +69,7 @@ C (clean bundle + installer) are repo-complete; Pass D is the friend's real inst
   `hue_bridge_id`) stamps bridge identity into hue observations so a clean install
   can adopt Hue lights (previously impossible — no producer of that metadata existed).
 - **Portable configuration (Pass A):** `packaging/scene_studio/` — profile example +
-  stdlib validator/renderer (`scene_studio_profile.py`: validate / resolve /
+  stdlib validator/renderer (`scene-studio-profile.py`: validate / resolve /
   render-apps-yaml; unknown keys fail, secret fields hold secret NAMES only, WLED
   multi-host rejected with the single-`wled_host` rationale, fresh installs start
   `registry_admin`). Both Scene Studio deployers resolve the HA URL as
@@ -94,7 +94,7 @@ C (clean bundle + installer) are repo-complete; Pass D is the friend's real inst
   scan, portability scan (LAN addresses / device ids / bridge ids / personal or
   production room names), Workbench build presence, clean-environment Python
   imports, sha256 `MANIFEST.sha256`. Bundle installer
-  `packaging/scene_studio/install_scene_studio.ps1` (preflight read-only by
+  `installer/deploy_scene_studio.ps1` (preflight read-only by
   default; `-Apply` drives the two deployers with backup/verify/rollback; never
   edits `apps.yaml`/`secrets.yaml`). Install/rollback guide:
   `packaging/scene_studio/PORTABLE_INSTALL.md`.
@@ -141,12 +141,12 @@ proven against a fake remote instead of assumed:
   npm build/smoke (structurally unavailable in the bundle; dist integrity still
   verified + remote gates unchanged). Source-repo deployments keep the
   build+smoke gates by default; the installer passes `-Prebuilt` explicitly.
-- **Installer contract:** `scene_studio_profile.py resolve` now emits ONE
+- **Installer contract:** `scene-studio-profile.py resolve` now emits ONE
   canonical nested shape (`providers.*`/`integrations.*`) — 849c643's installer
   read `$Settings.providers.*` against a flattened resolve and could never work;
   the acceptance harness runs the bundled installer against the bundled profile
   tooling, proving the seam. Installer preflight order: bundle manifest
-  verification (byte-exact, no unlisted payload — `verify_bundle_manifest.ps1`)
+  verification (byte-exact, no unlisted payload — `verify_release_manifest.ps1`)
   BEFORE any remote contact; add-on root existence check, then read-only remote
   state classification (a mistyped AddonConfigRoot fails read-only, never
   reads as a fresh install); provider

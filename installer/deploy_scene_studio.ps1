@@ -1,16 +1,19 @@
 <#
 .SYNOPSIS
-  Scene Studio portable installer — verify a clean bundle, preflight the
-  deployment, and install/upgrade through the bundle's own deployers.
+  Scene Studio profile-driven deployer — verify the release tree (when a
+  manifest is present), preflight the deployment, and install/upgrade through
+  the component deployers. Driven by the guided wizard; power users and CI
+  can run it directly with a hand-written profile.
 
 .DESCRIPTION
-  Run from a CLEAN distribution bundle (never a clone of the source repo):
-  the bundle root is the directory containing MANIFEST.sha256.
+  Runs from the release tree (MANIFEST.sha256 present, verified byte-exact)
+  or straight from a development checkout (no manifest; the release
+  integrity gate is skipped and the deployers' own safety gates apply).
 
   Ordering is deliberate — everything that can fail LOCALLY fails before any
   remote contact:
 
-    1. bundle manifest verification (byte-exact, no unlisted payload);
+    1. release manifest verification, when present (byte-exact, no unlisted payload);
     2. profile validation + resolution into the canonical shape;
     3. remote state classification (read-only ssh): backend/Workbench
        present vs absent -> UPGRADE vs FRESH INSTALL, never guessed from a
@@ -51,8 +54,8 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
 }
 
 $BundleRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$ProfileTool = Join-Path $PSScriptRoot 'scene_studio_profile.py'
-$ManifestTool = Join-Path $PSScriptRoot 'verify_bundle_manifest.ps1'
+$ProfileTool = Join-Path $PSScriptRoot 'scene-studio-profile.py'
+$ManifestTool = Join-Path $PSScriptRoot 'verify_release_manifest.ps1'
 $BackendDeployer = Join-Path $BundleRoot 'installer\deploy_scene_studio_backend.ps1'
 $WorkbenchDeployer = Join-Path $BundleRoot 'installer\deploy_scene_studio_workbench.ps1'
 $Manifest = Join-Path $BundleRoot 'MANIFEST.sha256'
@@ -105,7 +108,7 @@ function ConvertTo-BashSingleQuoted {
 
 Write-Host '== 1. Release integrity (local, before any remote contact) =='
 if ($HasManifest) {
-    & pwsh -NoProfile -ExecutionPolicy Bypass -File $ManifestTool -BundleRoot $BundleRoot
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File $ManifestTool -ReleaseRoot $BundleRoot
     if ($LASTEXITCODE -ne 0) {
         throw 'Release manifest verification FAILED: the tree was changed, is incomplete, or carries unlisted files. Do not install from it.'
     }

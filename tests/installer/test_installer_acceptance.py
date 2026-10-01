@@ -41,9 +41,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SUPPORT_DIR = Path(__file__).resolve().parent
 FAKE_SSH = SUPPORT_DIR / "fake_remote_ha.py"
 BUILDER = REPO_ROOT / "scripts" / "build_release.py"
-INSTALLER = REPO_ROOT / "installer" / "install_scene_studio.ps1"
-MANIFEST_TOOL = REPO_ROOT / "installer" / "verify_bundle_manifest.ps1"
-PROFILE_EXAMPLE = REPO_ROOT / "installer" / "scene-studio.profile.example.json"
+INSTALLER = REPO_ROOT / "installer" / "deploy_scene_studio.ps1"
+MANIFEST_TOOL = REPO_ROOT / "installer" / "verify_release_manifest.ps1"
+PROFILE_EXAMPLE = REPO_ROOT / "installer" / "scene-studio-profile.example.json"
 
 ADDON_ROOT = "/addon_configs/fake_addon"
 
@@ -229,29 +229,29 @@ def fresh_env(tmp_path):
 
 
 def test_release_manifest_verification_accept_and_reject(release_dir):
-    ok = _run_ps(MANIFEST_TOOL, ["-BundleRoot", str(release_dir)], dict(os.environ))
+    ok = _run_ps(MANIFEST_TOOL, ["-ReleaseRoot", str(release_dir)], dict(os.environ))
     assert ok.returncode == 0, ok.stdout + ok.stderr
     assert "byte-exact" in ok.stdout
 
-    victim = release_dir / "installer" / "scene_studio_profile.py"
+    victim = release_dir / "installer" / "scene-studio-profile.py"
     original = victim.read_bytes()
     try:
         victim.write_bytes(original + b"\n# tampered\n")
-        tampered = _run_ps(MANIFEST_TOOL, ["-BundleRoot", str(release_dir)], dict(os.environ))
+        tampered = _run_ps(MANIFEST_TOOL, ["-ReleaseRoot", str(release_dir)], dict(os.environ))
         assert tampered.returncode != 0
         assert "mismatch for" in (tampered.stdout + tampered.stderr).lower()
 
         victim.unlink()
-        missing = _run_ps(MANIFEST_TOOL, ["-BundleRoot", str(release_dir)], dict(os.environ))
+        missing = _run_ps(MANIFEST_TOOL, ["-ReleaseRoot", str(release_dir)], dict(os.environ))
         assert missing.returncode != 0
-        assert "missing from bundle" in (missing.stdout + missing.stderr)
+        assert "missing from release tree" in (missing.stdout + missing.stderr)
     finally:
         victim.write_bytes(original)
 
     extra = release_dir / "smuggled.txt"
     extra.write_text("unlisted payload", encoding="utf-8")
     try:
-        extra_added = _run_ps(MANIFEST_TOOL, ["-BundleRoot", str(release_dir)], dict(os.environ))
+        extra_added = _run_ps(MANIFEST_TOOL, ["-ReleaseRoot", str(release_dir)], dict(os.environ))
         assert extra_added.returncode != 0
         assert "not listed" in (extra_added.stdout + extra_added.stderr)
     finally:
@@ -261,7 +261,7 @@ def test_release_manifest_verification_accept_and_reject(release_dir):
 def test_installer_preflight_is_read_only(release_dir, fresh_env, tmp_path):
     profile = tmp_path / "fresh.profile.json"
     _write_profile(profile, ha_url=fresh_env["ha_url"])
-    result = _run_ps(release_dir / "installer" / "install_scene_studio.ps1", ["-Profile", str(profile)], fresh_env["env"])
+    result = _run_ps(release_dir / "installer" / "deploy_scene_studio.ps1", ["-Profile", str(profile)], fresh_env["env"])
     assert result.returncode == 0, f"stdout:\n{result.stdout[-3000:]}\nstderr:\n{result.stderr[-3000:]}"
     assert "Preflight OK" in result.stdout
     assert "ABSENT (fresh install)" in result.stdout
@@ -281,7 +281,7 @@ def test_installer_rejects_nonexistent_addon_root(release_dir, fresh_env, tmp_pa
     profile_text = json.loads(profile.read_text(encoding="utf-8"))
     profile_text["appdaemon_config_root"] = "/addon_configs/does_not_exist"
     profile.write_text(json.dumps(profile_text, indent=2), encoding="utf-8")
-    result = _run_ps(release_dir / "installer" / "install_scene_studio.ps1", ["-Profile", str(profile)], fresh_env["env"])
+    result = _run_ps(release_dir / "installer" / "deploy_scene_studio.ps1", ["-Profile", str(profile)], fresh_env["env"])
     assert result.returncode != 0
     combined = result.stdout + result.stderr
     assert "does not exist" in combined, combined[-800:]
@@ -296,7 +296,7 @@ def test_installer_rejects_nonexistent_addon_root(release_dir, fresh_env, tmp_pa
 def test_fresh_install_end_to_end_through_stubs(release_dir, fresh_env, tmp_path):
     profile = tmp_path / "fresh.profile.json"
     _write_profile(profile, ha_url=fresh_env["ha_url"])
-    result = _run_ps(release_dir / "installer" / "install_scene_studio.ps1", ["-Profile", str(profile), "-Apply"], fresh_env["env"])
+    result = _run_ps(release_dir / "installer" / "deploy_scene_studio.ps1", ["-Profile", str(profile), "-Apply"], fresh_env["env"])
     assert result.returncode == 0, f"stdout:\n{result.stdout[-4000:]}\nstderr:\n{result.stderr[-4000:]}"
 
     fs = fresh_env["state_dir"] / "fs"
@@ -324,7 +324,7 @@ def test_fresh_install_end_to_end_through_stubs(release_dir, fresh_env, tmp_path
 def test_fresh_install_requires_registry_admin_profile(release_dir, fresh_env, tmp_path):
     profile = tmp_path / "normal.profile.json"
     _write_profile(profile, ha_url=fresh_env["ha_url"], runtime_mode="normal")
-    result = _run_ps(release_dir / "installer" / "install_scene_studio.ps1", ["-Profile", str(profile), "-Apply"], fresh_env["env"])
+    result = _run_ps(release_dir / "installer" / "deploy_scene_studio.ps1", ["-Profile", str(profile), "-Apply"], fresh_env["env"])
     assert result.returncode != 0
     assert "registry_admin" in (result.stdout + result.stderr)
     for call in _read_calls(fresh_env["state_dir"]):
@@ -336,7 +336,7 @@ def test_provider_preflight_blocks_apply_on_unreachable_host(release_dir, fresh_
     profile = tmp_path / "wled.profile.json"
     # port 1 on 127.0.0.1 is closed in the test environment
     _write_profile(profile, ha_url=fresh_env["ha_url"], wled_host="127.0.0.1:1")
-    result = _run_ps(release_dir / "installer" / "install_scene_studio.ps1", ["-Profile", str(profile), "-Apply"], fresh_env["env"])
+    result = _run_ps(release_dir / "installer" / "deploy_scene_studio.ps1", ["-Profile", str(profile), "-Apply"], fresh_env["env"])
     assert result.returncode != 0
     assert "not reachable" in (result.stdout + result.stderr)
 
@@ -348,7 +348,7 @@ def test_provider_preflight_blocks_apply_on_unreachable_host(release_dir, fresh_
     try:
         reachable_profile = tmp_path / "wled-ok.profile.json"
         _write_profile(reachable_profile, ha_url=fresh_env["ha_url"], wled_host=f"127.0.0.1:{port}")
-        ok = _run_ps(release_dir / "installer" / "install_scene_studio.ps1", ["-Profile", str(reachable_profile), "-Apply"], fresh_env["env"])
+        ok = _run_ps(release_dir / "installer" / "deploy_scene_studio.ps1", ["-Profile", str(reachable_profile), "-Apply"], fresh_env["env"])
         assert ok.returncode == 0, f"stdout:\n{ok.stdout[-3000:]}\nstderr:\n{ok.stderr[-3000:]}"
     finally:
         listener.close()
@@ -363,7 +363,7 @@ def test_upgrade_preserves_backup_and_mode_semantics(release_dir, tmp_path):
     with FakeHaApi() as api:
         _write_profile(profile, ha_url=f"http://127.0.0.1:{api.port}", runtime_mode="normal")
         result = _run_ps(
-            release_dir / "installer" / "install_scene_studio.ps1",
+            release_dir / "installer" / "deploy_scene_studio.ps1",
             ["-Profile", str(profile), "-Apply"],
             _make_env(state_dir, shim_dir),
         )

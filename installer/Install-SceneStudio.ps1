@@ -85,14 +85,14 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
 # In both cases $BundleRoot ends up as the product root.
 # ---------------------------------------------------------------------------
 
-if (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'installer\install_scene_studio.ps1')) {
+if (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'installer\deploy_scene_studio.ps1')) {
     $BundleRoot = (Resolve-Path $PSScriptRoot).Path
-    $InternalInstaller = Join-Path $BundleRoot 'installer\install_scene_studio.ps1'
-    $ProfileTool = Join-Path $BundleRoot 'installer\scene_studio_profile.py'
-} elseif (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'install_scene_studio.ps1')) {
+    $InternalInstaller = Join-Path $BundleRoot 'installer\deploy_scene_studio.ps1'
+    $ProfileTool = Join-Path $BundleRoot 'installer\scene-studio-profile.py'
+} elseif (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'deploy_scene_studio.ps1')) {
     $BundleRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-    $InternalInstaller = Join-Path $PSScriptRoot 'install_scene_studio.ps1'
-    $ProfileTool = Join-Path $PSScriptRoot 'scene_studio_profile.py'
+    $InternalInstaller = Join-Path $PSScriptRoot 'deploy_scene_studio.ps1'
+    $ProfileTool = Join-Path $PSScriptRoot 'scene-studio-profile.py'
 } else {
     throw 'Install-SceneStudio.ps1 could not locate the installer support tree. Re-extract the full release.'
 }
