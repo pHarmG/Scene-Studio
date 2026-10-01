@@ -16,6 +16,8 @@ dependencies = []
 [project.optional-dependencies]
 dev = [
   "pytest>=8.3.0,<9.0.0",
+  # Adapter session-pooling coverage imports requests; core dependencies stay empty.
+  "requests>=2.31.0,<3.0.0",
 ]
 
 [tool.setuptools]
