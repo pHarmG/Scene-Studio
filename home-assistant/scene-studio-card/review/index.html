@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scene Studio Card Review</title>
+</head>
+<body>
+  <script type="module">
+    import "../dist/scene-studio-card.js";
+    import { setupReviewGrid, createReviewScenario } from "../preview-shared/ha-preview-shell.mjs";
+    import { SCENARIOS, createMockHass, PROJECTION_ENTITY } from "./../preview/mock-projection.mjs";
+
+    const grid = setupReviewGrid(document, { theme: "dark" });
+
+    function seedSelection(scenario) {
+      const key = `scene-studio-ui:selected-scene:${PROJECTION_ENTITY}`;
+      try {
+        if (scenario.selected) window.localStorage.setItem(key, scenario.selected);
+        else window.localStorage.removeItem(key);
+      } catch {
+        // ignore
+      }
+    }
+
+    async function mount(scenario) {
+      const { wrapper, shell } = createReviewScenario(document, {
+        id: `scenario-${scenario.id}`,
+        width: scenario.widthPx,
+        theme: "dark",
+        caption: `${scenario.id} · ${scenario.widthPx}px`,
+      });
+
+      seedSelection(scenario);
+      const card = document.createElement("scene-studio-card");
+      card.setConfig({
+        type: "custom:scene-studio-card",
+        collapsed_by_default: Boolean(scenario.collapsed),
+        preview_panel_open: scenario.panelOpen && scenario.panelKind !== "sessions",
+      });
+      card.hass = createMockHass(scenario, { onRender: () => (card.hass = { ...card.hass }) });
+      shell.appendChild(card);
+      grid.appendChild(wrapper);
+      await card.updateComplete;
+      if (scenario.panelKind === "sessions") {
+        card._sessionsPanelOpen = true;
+        await card.updateComplete;
+      }
+      if (scenario.autoFire) {
+        const btn = card.shadowRoot?.querySelector(".controlRow .actionButton");
+        if (btn) btn.click();
+        await new Promise((r) => setTimeout(r, 30));
+      }
+    }
+
+    for (const scenario of SCENARIOS) {
+      await mount(scenario);
+    }
+
+    window.__tbsc_review_ready = true;
+    window.__tbsc_review_scenarios = SCENARIOS.map((scenario) => ({
+      id: scenario.id,
+      elementId: `scenario-${scenario.id}`,
+      meta: { widthPx: scenario.widthPx },
+    }));
+  </script>
+</body>
+</html>

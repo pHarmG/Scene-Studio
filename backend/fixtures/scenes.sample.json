@@ -1,0 +1,180 @@
+{
+  "scenes": [
+    {
+      "schema_version": 2,
+      "id": "twilight",
+      "name": "Twilight",
+      "target_ids": [
+        "studio"
+      ],
+      "palette": [
+        "#1a237e",
+        "#4527a0",
+        "#7b1fa2",
+        "#ff8f00"
+      ],
+      "brightness": 55.0,
+      "motion": {
+        "mode": "static",
+        "speed": 0.0,
+        "strategy": "auto"
+      },
+      "fixture_states": {
+        "g_strip": {
+          "on": true,
+          "brightness": 55.0,
+          "gradient": [
+            "#1a237e",
+            "#4527a0",
+            "#7b1fa2",
+            "#ff8f00"
+          ],
+          "transition_ms": 400
+        },
+        "middle_bar": {
+          "on": true,
+          "brightness": 50.0,
+          "color": "#4527a0"
+        },
+        "lamp": {
+          "on": true,
+          "brightness": 40.0,
+          "color": "#ff8f00"
+        },
+        "lower_bar": {
+          "on": true,
+          "brightness": 60.0,
+          "color": "#7b1fa2"
+        },
+        "upper_bar": {
+          "on": true,
+          "brightness": 60.0,
+          "color": "#1a237e"
+        },
+        "office_strip": {
+          "on": true,
+          "brightness": 45.0,
+          "color": "#4527a0"
+        },
+        "wled_seg_0": {
+          "on": true,
+          "brightness": 50.0,
+          "color": "#1a237e"
+        },
+        "wled_seg_1": {
+          "on": true,
+          "brightness": 50.0,
+          "color": "#4527a0"
+        },
+        "wled_seg_2": {
+          "on": true,
+          "brightness": 50.0,
+          "color": "#7b1fa2"
+        },
+        "wled_seg_3": {
+          "on": true,
+          "brightness": 50.0,
+          "color": "#ff8f00"
+        },
+        "wled_seg_4": {
+          "on": true,
+          "brightness": 50.0,
+          "color": "#7b1fa2"
+        },
+        "wled_seg_5": {
+          "on": true,
+          "brightness": 50.0,
+          "color": "#4527a0"
+        }
+      },
+      "metadata": {
+        "origin": "migrated",
+        "migrated_from_v1": {
+          "filename": "twilight.json",
+          "saved_at": "2026-03-18T20:40:12Z"
+        }
+      }
+    },
+    {
+      "schema_version": 2,
+      "id": "aurora_flow",
+      "name": "Aurora Flow",
+      "target_ids": [
+        "studio"
+      ],
+      "palette": [
+        "#00e5ff",
+        "#2979ff",
+        "#7c4dff",
+        "#00c853"
+      ],
+      "brightness": 60.0,
+      "motion": {
+        "mode": "palette_cycle",
+        "speed": 0.4,
+        "strategy": "auto"
+      },
+      "fixture_states": {
+        "g_strip": {
+          "on": true,
+          "gradient": [
+            "#00e5ff",
+            "#2979ff",
+            "#7c4dff"
+          ]
+        },
+        "wled_seg_0": {
+          "on": true,
+          "provider_ext": {
+            "wled": {
+              "fx": 10,
+              "sx_hint": "speed"
+            }
+          }
+        }
+      },
+      "default_state": {
+        "on": true,
+        "brightness": 60.0
+      },
+      "metadata": {
+        "origin": "authored",
+        "tags": [
+          "dynamic",
+          "evening"
+        ]
+      }
+    },
+    {
+      "schema_version": 2,
+      "id": "meeting_blue",
+      "name": "Meeting Blue",
+      "target_ids": [
+        "studio"
+      ],
+      "palette": [
+        "#0d47a1",
+        "#2962ff"
+      ],
+      "motion": {
+        "mode": "static",
+        "speed": 0.0,
+        "strategy": "auto"
+      },
+      "fixture_states": {
+        "office_strip": {
+          "on": true,
+          "brightness": 70.0,
+          "color": "#2962ff"
+        }
+      },
+      "metadata": {
+        "origin": "migrated",
+        "migrated_from_v1": {
+          "filename": "meeting_blue.json"
+        },
+        "archived_at": "2026-09-01T12:00:00Z"
+      }
+    }
+  ]
+}

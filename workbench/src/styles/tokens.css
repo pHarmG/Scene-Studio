@@ -1,0 +1,156 @@
+/*
+ * Scene Studio Workbench design tokens.
+ * Plain CSS custom properties; these pierce Lit shadow DOM.
+ *
+ * Status semantics are fixed (AGENTS.md styling mandate):
+ *   green = healthy/ready/ok, yellow = transitional/degraded/warning,
+ *   red = failed/missing/error, gray = idle/disabled/inactive.
+ */
+:root {
+  /* surfaces */
+  --ss-bg: #101318;
+  --ss-surface: #181d24;
+  --ss-surface-2: #20262f;
+  /* Stage 3+: a darker "below deck" sub-surface for diagnostics/technical
+     content (facelift plan §4.6) — deliberately one step darker than
+     --ss-surface, never used for anything status-bearing. */
+  --ss-surface-3: #141920;
+  --ss-border: #2b333e;
+  --ss-border-soft: #232a34;
+
+  /* text */
+  --ss-text: #e7ebf1;
+  --ss-text-dim: #98a2b0;
+  --ss-text-faint: #6d7684;
+
+  /* semantic status (fixed mapping) */
+  --ss-ok: #43b971;
+  --ss-ok-dim: rgba(67, 185, 113, 0.16);
+  --ss-warn: #e0a83a;
+  --ss-warn-dim: rgba(224, 168, 58, 0.16);
+  --ss-err: #e05d5d;
+  --ss-err-dim: rgba(224, 93, 93, 0.16);
+  --ss-idle: #8a93a0;
+  --ss-idle-dim: rgba(138, 147, 160, 0.14);
+
+  /* accent */
+  --ss-accent: #5b8def;
+
+  /* geometry */
+  --ss-radius: 12px;
+  --ss-radius-sm: 10px;
+  /* Stage 3+: larger radius for inner hero session chrome (playback
+     session wash) and other non-card accents. Shared pane chrome lives
+     on <ss-panel> via --ss-radius so Overview, Playback, lists, and
+     the inspector share one corner radius. */
+  --ss-radius-lg: 16px;
+  /* Scale-up pass (2026-09-16, user feedback: "the entire scale of the UI
+     ridiculously tiny... I want to hit zoom twice"): row height, gutter,
+     base font, font-mono, and the whole size scale below moved up ~15-18%
+     so the Workbench reads comfortably at native browser zoom on both
+     desktop and mobile, instead of needing the user to zoom in. */
+  --ss-row-h: 44px;
+  --ss-gutter: 14px;
+
+  /* Touch-target pass (2026-09-29, user feedback: on an iPhone the header
+     rows and content all read the same small size and controls are too
+     small for finger precision). Interactive-control geometry as tokens so
+     the mobile/coarse-pointer block below can rescale EVERY shadow-DOM
+     component at once — tokens pierce Lit shadow DOM, hard-coded px do not.
+       --ss-control-h  min height of text buttons/selects/inputs
+       --ss-icon-btn   header square icon buttons (inbox, gear, close)
+       --ss-row-btn    dense in-row square icon buttons (apply/play/overflow)
+       --ss-cap-btn    capability glyph buttons (informational popovers)
+       --ss-actions-col  scene row's fixed actions column (fits 3 row-btns) */
+  --ss-control-h: 36px;
+  --ss-icon-btn: 36px;
+  --ss-row-btn: 32px;
+  --ss-cap-btn: 24px;
+  --ss-actions-col: 108px;
+
+  /* type */
+  --ss-font:
+    15px/1.5 "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial,
+    sans-serif;
+  --ss-font-mono: 13px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace;
+  /* Stage 3+ type scale (facelift plan §3), scaled up from the original
+     11/12/13/15/20/28. --ss-font's 15px base moved with it. */
+  --ss-size-11: 13px;
+  --ss-size-12: 14px;
+  --ss-size-13: 15px;
+  --ss-size-15: 17px;
+  --ss-size-20: 22px;
+  --ss-size-28: 30px;
+
+  /* Fixture list row grid (shared by <ss-fixture-row> and <ss-fixture-cluster>
+     so a clustered group's summary lines up column-for-column with every
+     plain row above/below/inside it — one table grammar, not two). */
+  /* Track 2 used to be a full-text "studio · whole_house" column
+     (minmax(130px, 1fr)); the live fixture color-state pass replaced that
+     text with the compact <ss-scope-control> pill, so this track only
+     needs to fit the pill, not a whole membership list. Track 4 used to
+     be minmax(150px, 1.3fr) so the live-state aura had a parking lot —
+     the aura is an absolutely-positioned overlay on the whole row, so
+     that 1.3fr just left a dead gutter after four 24px glyphs. Caps
+     size to the chip row; leftover width goes to the name. */
+  /* Fixed (not `auto`/`fr`) for tracks 2–4: <ss-fixture-row> and
+     <ss-fixture-cluster>'s summary are two SEPARATE grid containers, so
+     an `auto` track would size independently per instance (each to its
+     own content's intrinsic width) and the columns would drift apart
+     the moment their track-2 content differs, e.g. a "Studio +1" pill
+     vs. a cluster's "6 segments" text — a fixed width keeps every row's
+     columns pixel-identical regardless of content, truncating instead
+     of resizing. */
+  --ss-scope-col: 108px;
+  --ss-caps-col: 108px;
+  --ss-fixture-cols: minmax(0, 1fr) var(--ss-scope-col) 66px var(--ss-caps-col);
+  --ss-fixture-cols-compact: minmax(0, 1fr) 66px;
+
+  /* layout */
+  --ss-inspector-w: 372px;
+  /* Stage 3+: raised from a flat 1180px per facelift plan §3 — clamps
+     between the old floor and a wide-display ceiling instead of a fixed
+     constant, removing dead margin on >=1920px displays without forcing
+     edge-to-edge content on a control cockpit. */
+  --ss-content-max: clamp(1180px, 92vw, 1600px);
+}
+
+/*
+ * Touch / mobile rescale (2026-09-29). Matches phones at either
+ * orientation (max-width) plus any primary-coarse-pointer device (tablets,
+ * phones in landscape). 16px base type also stops iOS Safari's
+ * focus-zoom-on-input (fires below 16px). Every interactive surface in the
+ * app reads its size from the tokens above, so this one block scales the
+ * header, tabs, rows, menus, and all buttons/selects together; components
+ * may add their own (max-width: 640px), (pointer: coarse) rules for
+ * details tokens can't express (paddings, sliders, swatches).
+ */
+@media (max-width: 640px), (pointer: coarse) {
+  :root {
+    --ss-row-h: 52px;
+    --ss-gutter: 12px;
+
+    --ss-font:
+      16px/1.5 "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial,
+      sans-serif;
+    --ss-font-mono: 14px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace;
+    --ss-size-11: 14px;
+    --ss-size-12: 15px;
+    --ss-size-13: 16px;
+    --ss-size-15: 18px;
+    --ss-size-20: 24px;
+    --ss-size-28: 32px;
+
+    /* Apple HIG minimum 44pt tap targets */
+    --ss-control-h: 44px;
+    --ss-icon-btn: 44px;
+    --ss-row-btn: 40px;
+    --ss-cap-btn: 30px;
+    /* 3 × 40px row buttons + 2 × 8px gaps */
+    --ss-actions-col: 136px;
+
+    --ss-scope-col: 116px;
+    --ss-caps-col: 132px;
+    --ss-inspector-w: 420px;
+  }
+}

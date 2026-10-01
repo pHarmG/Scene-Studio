@@ -1,0 +1,60 @@
+{
+  "registry_updated": "2026-09-11T23:00:00Z",
+  "render_plan": {
+    "fixture_plans": [
+      {
+        "fidelity": "equivalent",
+        "fixture_id": "office_strip",
+        "operations": [
+          {
+            "description": "Apply static scene state via Hue CLIP v2",
+            "op": "hue.put_light",
+            "payload": {
+              "color": {
+                "xy": {
+                  "x": 0.1619,
+                  "y": 0.0856
+                }
+              },
+              "dimming": {
+                "brightness": 70.0
+              },
+              "on": {
+                "on": true
+              }
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000018"
+          }
+        ],
+        "provider": "hue_v2"
+      }
+    ],
+    "notes": [
+      "skipped fixture 'custom_gradient': no fixture_states entry and scene has no default_state",
+      "skipped fixture 'double_strip': disabled",
+      "skipped fixture 'g_strip': no fixture_states entry and scene has no default_state",
+      "skipped fixture 'lamp': no fixture_states entry and scene has no default_state",
+      "skipped fixture 'lower_bar': no fixture_states entry and scene has no default_state",
+      "skipped fixture 'middle_bar': no fixture_states entry and scene has no default_state",
+      "skipped fixture 'upper_bar': no fixture_states entry and scene has no default_state",
+      "skipped fixture 'wled_seg_0': no fixture_states entry and scene has no default_state",
+      "skipped fixture 'wled_seg_1': no fixture_states entry and scene has no default_state",
+      "skipped fixture 'wled_seg_2': no fixture_states entry and scene has no default_state",
+      "skipped fixture 'wled_seg_3': no fixture_states entry and scene has no default_state",
+      "skipped fixture 'wled_seg_4': no fixture_states entry and scene has no default_state",
+      "skipped fixture 'wled_seg_5': no fixture_states entry and scene has no default_state"
+    ],
+    "scene_id": "meeting_blue",
+    "skipped_fixture_ids": [
+      "double_strip"
+    ],
+    "target_ids": [
+      "office"
+    ]
+  },
+  "scene_id": "meeting_blue",
+  "target_ids": [
+    "office"
+  ]
+}

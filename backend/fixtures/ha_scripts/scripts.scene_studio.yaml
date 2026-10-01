@@ -1,0 +1,137 @@
+# Canonical Scene Studio HA scripts (unification pass).
+# Patch into /config/scripts.yaml. Do not replace the whole file.
+# Live pulled 2026-09-16: apply_scene_script currently calls
+# rest_command.scene_studio_apply_scene; delete_scene_script is already gone.
+
+scene_studio_apply:
+  alias: Scene Studio Apply
+  description: Apply a Scene Studio scene by stable scene_id through sensor.scene_studio_ui / scene_studio_ui_command.
+  mode: queued
+  fields:
+    scene_id:
+      name: Scene ID
+      required: true
+      example: meeting_blue
+      selector:
+        text:
+  sequence:
+  - variables:
+      request_id: ha-{{ now().timestamp() | int }}-{{ range(1000, 9999) | random }}
+      scene_id_clean: '{{ scene_id | default('''', true) | string | trim }}'
+  - if:
+    - condition: template
+      value_template: '{{ scene_id_clean | length == 0 }}'
+    then:
+    - stop: scene_id is required
+  - event: scene_studio_ui_command
+    event_data:
+      command: scene.apply
+      scene_id: '{{ scene_id_clean }}'
+      request_id: '{{ request_id }}'
+  - wait_template: >-
+      {{
+        state_attr('sensor.scene_studio_ui', 'last_command') is mapping
+        and state_attr('sensor.scene_studio_ui', 'last_command').get('request_id') == request_id
+      }}
+    timeout: '00:00:08'
+    continue_on_timeout: false
+  - if:
+    - condition: template
+      value_template: >-
+        {{ not (state_attr('sensor.scene_studio_ui', 'last_command').get('ok') | default(false)) }}
+    then:
+    - stop: Scene Studio apply failed
+
+scene_studio_target_power:
+  alias: Scene Studio Target Power
+  description: On/off/toggle a Scene Studio target as a room. Toggle is all-off if any member is on, otherwise all-on.
+  mode: queued
+  fields:
+    target_id:
+      name: Target ID
+      required: true
+      example: studio
+      selector:
+        text:
+    action:
+      name: Action
+      required: true
+      example: toggle
+      selector:
+        select:
+          options:
+          - "on"
+          - "off"
+          - "toggle"
+  sequence:
+  - variables:
+      target_id_clean: '{{ target_id | default('''', true) | string | trim }}'
+      action_clean: '{{ action | default('''', true) | string | lower | trim }}'
+      projected: '{{ state_attr(''sensor.scene_studio_ui'', ''targets'') or [] }}'
+      match: '{{ projected | selectattr(''id'', ''eq'', target_id_clean) | list | first | default(none) }}'
+  - if:
+    - condition: template
+      value_template: '{{ match is none }}'
+    then:
+    - action: persistent_notification.create
+      data:
+        title: Scene Studio target missing
+        message: 'No projected target ''{{ target_id_clean }}''.'
+    - stop: Target not found
+  - if:
+    - condition: template
+      value_template: '{{ match.complete_ha_coverage | string | lower != ''true'' }}'
+    then:
+    - action: persistent_notification.create
+      data:
+        title: Scene Studio incomplete coverage
+        message: >-
+          Target '{{ target_id_clean }}' has incomplete HA coverage
+          ({{ match.ha_covered_fixture_count }}/{{ match.enabled_fixture_count }}).
+          Partial room toggle refused.
+    - stop: Incomplete HA coverage
+  - if:
+    - condition: template
+      value_template: '{{ (match.ha_entity_ids | default([], true) | length) == 0 }}'
+    then:
+    - stop: No HA entities on target
+  - variables:
+      # Room-level toggle (not per-entity light.toggle). Spec:
+      # scene_studio.domain.target_power.resolve_target_power_action
+      resolved_action: >-
+        {% if action_clean == 'toggle' %}
+          {% if match.ha_entity_ids | select('is_state', 'on') | list | length > 0 %}off{% else %}on{% endif %}
+        {% else %}
+          {{ action_clean }}
+        {% endif %}
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ resolved_action | string | trim == ''on'' }}'
+      sequence:
+      - action: light.turn_on
+        target:
+          entity_id: '{{ match.ha_entity_ids }}'
+    - conditions:
+      - condition: template
+        value_template: '{{ resolved_action | string | trim == ''off'' }}'
+      sequence:
+      - action: light.turn_off
+        target:
+          entity_id: '{{ match.ha_entity_ids }}'
+    default:
+    - stop: action must be on, off, or toggle
+
+# Transitional wrapper. After automation.apply_office_work_scene is migrated
+# to script.scene_studio_apply and dashboards no longer call this script,
+# delete this block (zero-consumer proof).
+apply_scene_script:
+  alias: apply_scene_script
+  description: Transitional wrapper — maps input_select.saved_scenes display name to scene_id, then calls script.scene_studio_apply.
+  sequence:
+  - variables:
+      selected: '{{ states(''input_select.saved_scenes'') | default('''', true) | string | trim }}'
+      scene_id: '{{ selected | lower | replace('' '', ''_'') }}'
+  - action: script.scene_studio_apply
+    data:
+      scene_id: '{{ scene_id }}'

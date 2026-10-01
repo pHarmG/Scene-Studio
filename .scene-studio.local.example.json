@@ -1,0 +1,21 @@
+{
+  "_comment": "Copy to .scene-studio.local.json (gitignored) and fill in YOUR local topology. Never commit the real file. No credentials belong here: tokens/keys come from environment variables (HA_TOKEN / SCENE_STUDIO_HA_TOKEN, SCENE_STUDIO_HUE_APP_KEY).",
+  "ha_api_url": "http://homeassistant.local:8123",
+  "ha_ssh_alias": "ha-host",
+  "ha_ssh_host": "homeassistant.local",
+  "ha_ssh_user": "your-ssh-user",
+  "ha_ssh_port": 22,
+  "appdaemon_config_root": "/addon_configs/a0d7b954_appdaemon",
+  "appdaemon_http_url": "http://homeassistant.local:5050",
+  "scene_studio_store_root": "/config/scene_studio_store",
+  "providers": {
+    "hue_host": null,
+    "wled_host": null,
+    "hyperhdr_host": null
+  },
+  "deployment_conventions": {
+    "shell": "pwsh (PowerShell 7 required for every deployer/installer)",
+    "deployers": "installer/deploy_scene_studio_backend.ps1, installer/deploy_scene_studio_workbench.ps1",
+    "ha_write_policy": "explicit user approval required before any write to a live Home Assistant host"
+  }
+}

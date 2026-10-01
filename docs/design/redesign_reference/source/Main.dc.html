@@ -1,0 +1,170 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    :root{
+      --bg:#101318; --surface:#181d24; --surface-2:#20262f;
+      --border:#2b333e; --border-soft:#232a34;
+      --text:#e7ebf1; --text-dim:#98a2b0; --text-faint:#6d7684;
+      --ok:#43b971; --ok-dim:rgba(67,185,113,.16);
+      --warn:#e0a83a; --warn-dim:rgba(224,168,58,.16);
+      --err:#e05d5d; --err-dim:rgba(224,93,93,.16);
+      --idle:#8a93a0; --idle-dim:rgba(138,147,160,.14);
+      --accent:#5b8def;
+      --radius-lg:14px; --radius:10px; --radius-sm:6px;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;}
+    a{color:var(--accent);}
+    a:hover{color:#82abf5;}
+    .shell{
+      min-height:900px; background:var(--bg); color:var(--text);
+      font-family:"Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    }
+    .top{display:flex;align-items:center;gap:14px;padding:18px 40px;border-bottom:1px solid var(--border-soft);}
+    .wordmark{font-size:15px;font-weight:600;margin:0;}
+    .tag{font-size:11px;color:var(--text-faint);border:1px solid var(--border);border-radius:4px;padding:2px 7px;}
+    .spacer{flex:1;}
+    .status-pill{display:flex;align-items:center;gap:7px;border-radius:999px;padding:7px 14px;font-size:12px;font-weight:600;border:none;background:var(--err-dim);color:var(--err);}
+    .status-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none;}
+    .icon-btn{position:relative;width:34px;height:34px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);color:var(--text-dim);display:flex;align-items:center;justify-content:center;}
+    .badge{position:absolute;top:-5px;right:-5px;background:var(--warn);color:#241a02;font-size:10px;font-weight:700;border-radius:999px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 3px;}
+    .conn-dot{position:absolute;bottom:2px;right:2px;width:7px;height:7px;border-radius:50%;background:var(--err);border:2px solid var(--surface);}
+    .tabs{display:flex;gap:4px;padding:0 40px;border-bottom:1px solid var(--border-soft);}
+    .tabs button{padding:13px 14px;font-size:13px;color:var(--text-dim);background:none;border:none;border-bottom:2px solid transparent;font-family:inherit;}
+    .tabs button.active{color:var(--text);border-bottom-color:var(--accent);font-weight:600;}
+    .content{padding:32px 40px 48px;max-width:1360px;}
+    .hero{position:relative;border-radius:var(--radius-lg);border:1px solid var(--border-soft);padding:30px 34px;overflow:hidden;background:var(--surface);}
+    .hero::before{content:"";position:absolute;inset:0;background:linear-gradient(120deg,rgba(0,229,255,.16),rgba(41,121,255,.12) 35%,rgba(124,77,255,.12) 65%,rgba(0,200,83,.16));pointer-events:none;}
+    .hero-inner{position:relative;display:flex;justify-content:space-between;gap:32px;}
+    .hero-eyebrow{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ok);}
+    .live-dot{width:6px;height:6px;border-radius:50%;background:var(--ok);animation:pulse 2.4s ease-in-out infinite;}
+    @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+    .hero-title{font-size:28px;font-weight:700;letter-spacing:-0.01em;margin:10px 0 6px;}
+    .hero-meta{font-size:13px;color:var(--text-dim);}
+    .hero-meta strong{color:var(--text);font-weight:600;}
+    .hero-band{height:8px;width:230px;border-radius:999px;margin:18px 0 20px;background:linear-gradient(90deg,#00e5ff,#2979ff,#7c4dff,#00c853);}
+    .hero-actions{display:flex;gap:8px;}
+    .hero-btn{display:flex;align-items:center;gap:7px;padding:9px 15px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:12px;font-weight:600;font-family:inherit;}
+    .hero-btn:hover{border-color:#3a4453;}
+    .hero-fidelity{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:6px;text-align:right;min-width:170px;}
+    .fidelity-num{font-size:20px;font-weight:700;}
+    .fidelity-label{font-size:11px;color:var(--text-faint);letter-spacing:.03em;}
+    .row-2col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px;}
+    .panel{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-lg);padding:18px 20px;}
+    .panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+    .panel-label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint);font-weight:700;}
+    .attn-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-left:3px solid var(--err);background:var(--err-dim);border-radius:0 8px 8px 0;}
+    .attn-icon{color:var(--err);flex:none;display:flex;}
+    .attn-body{flex:1;min-width:0;}
+    .attn-title{font-size:13px;font-weight:600;}
+    .attn-sub{font-size:12px;color:var(--text-dim);margin-top:2px;}
+    .attn-link{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:var(--text-dim);flex:none;}
+    .fleet-line{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border-soft);font-size:13px;}
+    .fleet-line:last-child{border-bottom:none;padding-bottom:0;}
+    .fleet-name{display:flex;align-items:center;gap:8px;color:var(--text-dim);}
+    .fleet-dot{width:7px;height:7px;border-radius:50%;flex:none;}
+    .fleet-val{font-weight:600;}
+    .ok-text{color:var(--ok);} .err-text{color:var(--err);} .warn-text{color:var(--warn);}
+  </style>
+</helmet>
+<div class="shell">
+  <header class="top">
+    <h1 class="wordmark">Scene Studio Workbench</h1>
+    <span class="tag">mock</span>
+    <div class="spacer"></div>
+    <button class="status-pill">
+      <span class="status-dot"></span>
+      7 issues
+    </button>
+    <button class="icon-btn" title="Discovery inbox">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v11l-3 5H7l-3-5z"/><path d="M4 15h4l2 3h4l2-3h4"/></svg>
+      <span class="badge">8</span>
+    </button>
+    <button class="icon-btn" title="System">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.6 1z"/></svg>
+      <span class="conn-dot"></span>
+    </button>
+  </header>
+  <nav class="tabs">
+    <button class="active">Overview</button>
+    <button>Scenes</button>
+    <button>Fixtures</button>
+  </nav>
+  <div class="content">
+    <div class="hero">
+      <div class="hero-inner">
+        <div>
+          <div class="hero-eyebrow"><span class="live-dot"></span>Studio · live</div>
+          <div class="hero-title">Aurora Flow is animating</div>
+          <div class="hero-meta">Started 6 min ago · <strong>palette_cycle</strong> · Hue 6/6 ok</div>
+          <div class="hero-band"></div>
+          <div class="hero-actions">
+            <button class="hero-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="3" width="5" height="18" rx="1"/><rect x="14" y="3" width="5" height="18" rx="1"/></svg>
+              Pause
+            </button>
+            <button class="hero-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+              Stop
+            </button>
+          </div>
+        </div>
+        <div class="hero-fidelity">
+          <div class="fidelity-num">6 <span style="color:var(--text-faint);font-weight:500;font-size:13px;">native</span></div>
+          <div class="fidelity-label">0 approximate · 6/6 fixtures</div>
+        </div>
+      </div>
+    </div>
+    <div class="row-2col">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-label">Needs attention</span>
+        </div>
+        <div class="attn-item">
+          <span class="attn-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </span>
+          <div class="attn-body">
+            <div class="attn-title">WLED offline</div>
+            <div class="attn-sub">6 fixtures affected — all WLED segments treated as missing</div>
+          </div>
+          <span class="attn-link">
+            View
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </span>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-label">Fleet</span>
+        </div>
+        <div class="fleet-line">
+          <span class="fleet-name"><span class="fleet-dot" style="background:var(--ok);"></span>Hue</span>
+          <span class="fleet-val ok-text">18/18 ok</span>
+        </div>
+        <div class="fleet-line">
+          <span class="fleet-name"><span class="fleet-dot" style="background:var(--err);"></span>WLED</span>
+          <span class="fleet-val err-text">0/6 offline</span>
+        </div>
+        <div class="fleet-line">
+          <span class="fleet-name"><span class="fleet-dot" style="background:var(--ok);"></span>HA</span>
+          <span class="fleet-val ok-text">1/1 ok</span>
+        </div>
+        <div class="fleet-line">
+          <span class="fleet-name" style="color:var(--text-dim);">Fixtures ready</span>
+          <span class="fleet-val">19/25 · <span class="err-text">6 missing</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

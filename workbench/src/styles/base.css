@@ -1,0 +1,143 @@
+/* Workbench base shell styles (document-level; components style themselves). */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--ss-bg);
+  color: var(--ss-text);
+  font: var(--ss-font);
+  color-scheme: dark;
+  /* Themed scrollbar instead of the default Windows chrome. scrollbar-color
+     and scrollbar-width are inherited CSS properties, so this reaches into
+     every shadow-DOM component's own scrolling containers too — no need to
+     repeat it per component. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--ss-border) transparent;
+}
+
+/* Chromium/Safari/Edge fallback for engines that honor the legacy
+   pseudo-elements over (or in addition to) scrollbar-color/-width. */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--ss-border);
+  border-radius: var(--ss-radius-sm);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--ss-text-faint);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+ss-app,
+ss-view-overview,
+ss-view-scenes,
+ss-view-fixtures,
+ss-view-discovery,
+ss-view-diagnostics {
+  display: block;
+}
+
+button {
+  font: inherit;
+}
+
+/* Shared compact control styles usable inside light-DOM view wrappers.
+   Heights come from the --ss-control-h touch-target token so the mobile /
+   coarse-pointer token block rescales them together with everything else. */
+.ss-btn {
+  appearance: none;
+  border: 1px solid var(--ss-border);
+  background: var(--ss-surface-2);
+  color: var(--ss-text);
+  border-radius: var(--ss-radius-sm);
+  padding: 5px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  line-height: 1.4;
+  min-height: var(--ss-control-h);
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+.ss-btn:hover {
+  border-color: var(--ss-accent);
+}
+
+.ss-btn.is-ok {
+  border-color: var(--ss-ok);
+  color: var(--ss-ok);
+}
+
+.ss-btn.is-warn {
+  border-color: var(--ss-warn);
+  color: var(--ss-warn);
+}
+
+.ss-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.row-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ss-border);
+  background: var(--ss-surface-2);
+  color: var(--ss-text);
+  border-radius: var(--ss-radius-sm);
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.2;
+  min-height: var(--ss-control-h);
+}
+
+.row-btn:hover {
+  border-color: var(--ss-accent);
+  background: color-mix(in srgb, var(--ss-text) 8%, var(--ss-surface-2));
+}
+
+.row-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ss-select {
+  background: var(--ss-surface-2);
+  color: var(--ss-text);
+  border: 1px solid var(--ss-border);
+  border-radius: var(--ss-radius-sm);
+  font-size: 14px;
+  padding: 5px 10px;
+  min-height: var(--ss-control-h);
+}
+
+/* Touch/mobile: 16px on form controls stops iOS Safari's focus zoom, and
+   the bump keeps finger-sized controls legible. */
+@media (max-width: 640px), (pointer: coarse) {
+  .ss-btn,
+  .row-btn,
+  .ss-select {
+    font-size: 16px;
+  }
+}

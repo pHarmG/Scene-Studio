@@ -1,0 +1,620 @@
+{
+  "run_id": "run-20260910-1905",
+  "started_at": "2026-09-10T19:05:00Z",
+  "finished_at": "2026-09-10T19:05:04Z",
+  "providers": [
+    "hue_v2",
+    "wled",
+    "ha_light"
+  ],
+  "observations": [
+    {
+      "provider": "hue_v2",
+      "provider_resource_id": "00000000-0000-4000-8000-000000000001",
+      "name": "Hue G Strip",
+      "location_hint": "Office",
+      "endpoint_hint": "bridge 001788demo000001",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": true,
+        "gradient": {
+          "max_points": 5
+        },
+        "dynamic_native": true
+      }
+    },
+    {
+      "provider": "hue_v2",
+      "provider_resource_id": "00000000-0000-4000-8000-000000000007",
+      "name": "Middle Bar",
+      "location_hint": "Office",
+      "endpoint_hint": "bridge 001788demo000001",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": true,
+        "color_temp": {
+          "mirek_min": 153,
+          "mirek_max": 500
+        }
+      }
+    },
+    {
+      "provider": "hue_v2",
+      "provider_resource_id": "00000000-0000-4000-8000-000000000008",
+      "name": "Lamp",
+      "location_hint": "Office",
+      "endpoint_hint": "bridge 001788demo000001",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": true
+      }
+    },
+    {
+      "provider": "hue_v2",
+      "provider_resource_id": "00000000-0000-4000-8000-000000000010",
+      "name": "Lower Bar",
+      "location_hint": "Office",
+      "endpoint_hint": "bridge 001788demo000001",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": true
+      }
+    },
+    {
+      "provider": "hue_v2",
+      "provider_resource_id": "00000000-0000-4000-8000-000000000015",
+      "name": "Upper Bar",
+      "location_hint": "Office",
+      "endpoint_hint": "bridge 001788demo000001",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": true
+      }
+    },
+    {
+      "provider": "hue_v2",
+      "provider_resource_id": "00000000-0000-4000-8000-000000000017",
+      "name": "Custom Gradient",
+      "location_hint": "Office",
+      "endpoint_hint": "bridge 001788demo000001",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": true,
+        "dynamic_native": false
+      }
+    },
+    {
+      "provider": "hue_v2",
+      "provider_resource_id": "00000000-0000-4000-8000-000000000018",
+      "name": "Office Strip",
+      "location_hint": "Office",
+      "endpoint_hint": "bridge 001788demo000001",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": true
+      }
+    },
+    {
+      "provider": "hue_v2",
+      "provider_resource_id": "00000000-0000-4000-8000-000000000000",
+      "name": "Bathroom Mirror Left",
+      "location_hint": "Bathroom",
+      "endpoint_hint": "bridge 001788demo000001",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": false,
+        "effects": [
+          "no_effect",
+          "candle"
+        ],
+        "dynamic_native": true
+      }
+    },
+    {
+      "provider": "hue_v2",
+      "provider_resource_id": "00000000-0000-4000-8000-000000000003",
+      "name": "Bathroom Mirror Right",
+      "location_hint": "Bathroom",
+      "endpoint_hint": "bridge 001788demo000001",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": false,
+        "effects": [
+          "no_effect",
+          "candle"
+        ],
+        "dynamic_native": true
+      }
+    },
+    {
+      "provider": "hue_v2",
+      "provider_resource_id": "00000000-0000-4000-8000-000000000009",
+      "name": "Bathroom Mirror Mid",
+      "location_hint": "Bathroom",
+      "endpoint_hint": "bridge 001788demo000001",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": false,
+        "effects": [
+          "no_effect",
+          "candle"
+        ],
+        "dynamic_native": true
+      }
+    },
+    {
+      "provider": "hue_v2",
+      "provider_resource_id": "00000000-0000-4000-8000-000000000005",
+      "name": "Bathroom Main",
+      "location_hint": "Bathroom",
+      "endpoint_hint": "bridge 001788demo000001",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": false,
+        "effects": [
+          "no_effect",
+          "candle"
+        ],
+        "dynamic_native": true
+      }
+    },
+    {
+      "provider": "hue_v2",
+      "provider_resource_id": "00000000-0000-4000-8000-000000000002",
+      "name": "Living Room Lamp",
+      "location_hint": "Living Room",
+      "endpoint_hint": "bridge 001788demo000001",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": false,
+        "effects": [
+          "no_effect",
+          "candle"
+        ],
+        "dynamic_native": true
+      }
+    },
+    {
+      "provider": "hue_v2",
+      "provider_resource_id": "00000000-0000-4000-8000-000000000004",
+      "name": "Desk Lamp",
+      "endpoint_hint": "bridge 001788demo000001",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": false,
+        "effects": [
+          "no_effect",
+          "candle"
+        ],
+        "dynamic_native": true
+      }
+    },
+    {
+      "provider": "hue_v2",
+      "provider_resource_id": "00000000-0000-4000-8000-000000000006",
+      "name": "Reading Lamp",
+      "endpoint_hint": "bridge 001788demo000001",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": false,
+        "effects": [
+          "no_effect",
+          "candle"
+        ],
+        "dynamic_native": true
+      }
+    },
+    {
+      "provider": "hue_v2",
+      "provider_resource_id": "00000000-0000-4000-8000-000000000011",
+      "name": "Bedroom Closet",
+      "location_hint": "Bedroom",
+      "endpoint_hint": "bridge 001788demo000001",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": false,
+        "effects": [
+          "no_effect",
+          "candle"
+        ],
+        "dynamic_native": true
+      }
+    },
+    {
+      "provider": "wled",
+      "provider_resource_id": "aabbccddeeff:seg:0",
+      "name": "Segment 0",
+      "endpoint_hint": "http://wled.local",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": false,
+        "dynamic_native": true
+      },
+      "metadata": {
+        "device_id": "aabbccddeeff",
+        "segment_start": 0,
+        "segment_stop": 5
+      }
+    },
+    {
+      "provider": "wled",
+      "provider_resource_id": "aabbccddeeff:seg:1",
+      "name": "Segment 1",
+      "endpoint_hint": "http://wled.local",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": false,
+        "dynamic_native": true
+      },
+      "metadata": {
+        "device_id": "aabbccddeeff",
+        "segment_start": 5,
+        "segment_stop": 10
+      }
+    },
+    {
+      "provider": "wled",
+      "provider_resource_id": "aabbccddeeff:seg:2",
+      "name": "Segment 2",
+      "endpoint_hint": "http://wled.local",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": false,
+        "dynamic_native": true
+      },
+      "metadata": {
+        "device_id": "aabbccddeeff",
+        "segment_start": 10,
+        "segment_stop": 15
+      }
+    },
+    {
+      "provider": "wled",
+      "provider_resource_id": "aabbccddeeff:seg:3",
+      "name": "Segment 3",
+      "endpoint_hint": "http://wled.local",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": false,
+        "dynamic_native": true
+      },
+      "metadata": {
+        "device_id": "aabbccddeeff",
+        "segment_start": 15,
+        "segment_stop": 20
+      }
+    },
+    {
+      "provider": "wled",
+      "provider_resource_id": "aabbccddeeff:seg:4",
+      "name": "Segment 4",
+      "endpoint_hint": "http://wled.local",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": false,
+        "dynamic_native": true
+      },
+      "metadata": {
+        "device_id": "aabbccddeeff",
+        "segment_start": 20,
+        "segment_stop": 25
+      }
+    },
+    {
+      "provider": "wled",
+      "provider_resource_id": "aabbccddeeff:seg:5",
+      "name": "Segment 5",
+      "endpoint_hint": "http://wled.local",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": false,
+        "dynamic_native": true
+      },
+      "metadata": {
+        "device_id": "aabbccddeeff",
+        "segment_start": 25,
+        "segment_stop": 30
+      }
+    },
+    {
+      "provider": "ha_light",
+      "provider_resource_id": "light.office_lights",
+      "name": "Office Lights",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true
+      },
+      "metadata": {
+        "ha_aggregate": true,
+        "ha_group_members": [
+          "light.office_front_lights",
+          "light.office_side_lights",
+          "light.office_back_lights"
+        ]
+      }
+    },
+    {
+      "provider": "ha_light",
+      "provider_resource_id": "light.office_front_lights",
+      "name": "Front Lights",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true
+      },
+      "metadata": {
+        "ha_aggregate": true,
+        "ha_group_members": [
+          "light.lamp",
+          "light.left",
+          "light.middle"
+        ]
+      }
+    },
+    {
+      "provider": "ha_light",
+      "provider_resource_id": "light.office_side_lights",
+      "name": "Side Lights",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true
+      },
+      "metadata": {
+        "ha_aggregate": true,
+        "ha_group_members": [
+          "light.hue_g_strip",
+          "light.office_strip",
+          "light.custom_gradient"
+        ]
+      }
+    },
+    {
+      "provider": "ha_light",
+      "provider_resource_id": "light.office_back_lights",
+      "name": "Back Lights",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true
+      },
+      "metadata": {
+        "ha_aggregate": true,
+        "ha_group_members": [
+          "light.lg_wled_segment_0",
+          "light.lg_wled_segment_1",
+          "light.lg_wled_segment_2",
+          "light.lg_wled_segment_3",
+          "light.lg_wled_segment_4",
+          "light.lg_wled_segment_5"
+        ]
+      }
+    },
+    {
+      "provider": "hue_v2",
+      "provider_resource_id": "00000000-0000-4000-8000-000000000016",
+      "name": "Unknown Gradient Strip",
+      "capabilities": {
+        "on_off": true,
+        "brightness": true,
+        "color_xy": true,
+        "gradient": {
+          "max_points": 7
+        },
+        "dynamic_native": true
+      },
+      "metadata": {
+        "first_seen": "2026-09-10T19:05:02Z"
+      }
+    }
+  ],
+  "candidates": [
+    {
+      "fixture_id": "double_strip",
+      "observation_id": "hue_v2:f0e1d2c3-0000-4000-8000-000000000001",
+      "compatibility": "incompatible",
+      "confidence": 0.35,
+      "reasons": [
+        "previous binding b55f34cf-ce41-476b-a30e-44ab4972f0c1 not observed",
+        "name differs (Unknown Gradient Strip vs Double Strip)",
+        "capability mismatch (gradient vs single)"
+      ]
+    },
+    {
+      "fixture_id": "custom_gradient",
+      "observation_id": "hue_v2:f54ec7de-77b1-4bdf-b12f-f5c083733006",
+      "compatibility": "compatible",
+      "confidence": 0.97,
+      "reasons": [
+        "previous binding resource_id matches",
+        "friendly name unchanged",
+        "effective capabilities match the current Hue binding"
+      ]
+    }
+  ],
+  "entries": [
+    {
+      "status": "bound_ready",
+      "fixture_id": "g_strip",
+      "observation_id": "hue_v2:2a2c45a9-8a61-4c04-bdaf-9bd928f9316a",
+      "detail": "unchanged"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "middle_bar",
+      "observation_id": "hue_v2:68ad5817-0907-4811-9a5c-e3a1d4a69803",
+      "detail": "unchanged"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "lamp",
+      "observation_id": "hue_v2:73acf87a-8835-435d-b422-e889c5017dac",
+      "detail": "unchanged"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "lower_bar",
+      "observation_id": "hue_v2:8e687c33-b45c-457e-92f6-0499fd7141eb",
+      "detail": "unchanged"
+    },
+    {
+      "status": "disabled",
+      "fixture_id": "double_strip",
+      "detail": "administratively disabled; discovery skipped provider lookup"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "upper_bar",
+      "observation_id": "hue_v2:d81298a8-0ae6-4b85-9fbd-bc7eaac50898",
+      "detail": "unchanged"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "custom_gradient",
+      "observation_id": "hue_v2:f54ec7de-77b1-4bdf-b12f-f5c083733006",
+      "detail": "effective Hue capabilities unchanged; physical limitation is recorded separately on the fixture"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "office_strip",
+      "observation_id": "hue_v2:ffaed708-d411-455e-843b-8bebae36f67c",
+      "detail": "unchanged"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "wled_seg_0",
+      "observation_id": "wled:aabbccddeeff:seg:0",
+      "detail": "unchanged"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "wled_seg_1",
+      "observation_id": "wled:aabbccddeeff:seg:1",
+      "detail": "unchanged"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "wled_seg_2",
+      "observation_id": "wled:aabbccddeeff:seg:2",
+      "detail": "unchanged"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "wled_seg_3",
+      "observation_id": "wled:aabbccddeeff:seg:3",
+      "detail": "unchanged"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "wled_seg_4",
+      "observation_id": "wled:aabbccddeeff:seg:4",
+      "detail": "unchanged"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "wled_seg_5",
+      "observation_id": "wled:aabbccddeeff:seg:5",
+      "detail": "unchanged"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "bathroom_mirror_left",
+      "observation_id": "hue_v2:026b71a8-f85a-455f-b317-90baf5f20e10",
+      "detail": "new fixture; binding captured from 2026-09-10 bridge pull"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "bathroom_mirror_right",
+      "observation_id": "hue_v2:5602549d-ffa2-46dd-b453-22b7e4ac1529",
+      "detail": "new fixture; binding captured from 2026-09-10 bridge pull"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "bathroom_mirror_mid",
+      "observation_id": "hue_v2:8490611a-5c77-40cc-b836-429667be6cc6",
+      "detail": "new fixture; binding captured from 2026-09-10 bridge pull"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "bathroom_main",
+      "observation_id": "hue_v2:5fd91f87-0a0f-45e3-a050-0f9f2f1d6012",
+      "detail": "new fixture; binding captured from 2026-09-10 bridge pull"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "living_room_lamp",
+      "observation_id": "hue_v2:50f25ba9-1b46-47b3-af8d-dda9b7afdc55",
+      "detail": "new fixture; binding captured from 2026-09-10 bridge pull"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "desk_lamp",
+      "observation_id": "hue_v2:5fc3af70-d9c7-4cf8-ac18-6d08fecd7410",
+      "detail": "new fixture; binding captured from 2026-09-10 bridge pull"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "reading_lamp",
+      "observation_id": "hue_v2:5fdc04d4-baa2-4f27-a28c-a48dac323144",
+      "detail": "new fixture; binding captured from 2026-09-10 bridge pull"
+    },
+    {
+      "status": "bound_ready",
+      "fixture_id": "bedroom_closet",
+      "observation_id": "hue_v2:9fc58253-0598-4dd4-98b1-b07febfacb89",
+      "detail": "new fixture; binding captured from 2026-09-10 bridge pull"
+    },
+    {
+      "status": "disabled",
+      "fixture_id": "water_light",
+      "detail": "administratively disabled; discovery skipped provider lookup"
+    },
+    {
+      "status": "disabled",
+      "fixture_id": "food_light",
+      "detail": "administratively disabled; discovery skipped provider lookup"
+    },
+    {
+      "status": "candidate_replacement",
+      "fixture_id": "double_strip",
+      "candidate_ids": [
+        "double_strip:hue_v2:f0e1d2c3-0000-4000-8000-000000000001"
+      ],
+      "detail": "previous binding missing; weak candidate available (review before rebinding)"
+    },
+    {
+      "status": "available_unbound",
+      "observation_id": "hue_v2:f0e1d2c3-0000-4000-8000-000000000001",
+      "detail": "new gradient strip with no fixture"
+    }
+  ],
+  "summary": {
+    "providers": 2,
+    "observations_total": 22,
+    "fixtures_bound_ready": 21,
+    "fixtures_missing": 0,
+    "fixtures_disabled": 3,
+    "fixtures_degraded": 0,
+    "candidate_replacements": 1,
+    "unbound_observations": 1,
+    "conflicts": 0
+  }
+}

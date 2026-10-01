@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scene Studio Card Interaction Harness</title>
+  <style>body{margin:0;background:#111827;padding:24px}</style>
+</head>
+<body>
+  <!-- Top offset: lets the interaction script pin the card's trigger near
+       the viewport bottom (the flip/no-room-below popover case). -->
+  <div style="height: 600px"></div>
+  <script type="module">
+    import "../dist/scene-studio-card.js";
+    import { SCENARIOS, createMockHass, PROJECTION_ENTITY } from "./../preview/mock-projection.mjs";
+
+    // Element registration snapshot for the interaction check: the canonical
+    // `scene-studio-card` and the compatibility alias must both resolve, and
+    // the alias must be the same card class (its constructor directly extends
+    // SceneStudioCard; alias-created elements are SceneStudioCard instances —
+    // see scripts/interaction-check.mjs block 0).
+    window.__elementRegistration = {
+      primary: customElements.get("scene-studio-card") ?? null,
+      alias: customElements.get("test-bench-scene-controls-card") ?? null,
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    const scenarioId = params.get("scenario") || "dynamic-idle";
+    const scenario = SCENARIOS.find((s) => s.id === scenarioId);
+    if (!scenario) throw new Error(`unknown scenario: ${scenarioId}`);
+
+    const key = `scene-studio-ui:selected-scene:${PROJECTION_ENTITY}`;
+    try {
+      if (scenario.selected) window.localStorage.setItem(key, scenario.selected);
+      else window.localStorage.removeItem(key);
+    } catch {
+      // ignore
+    }
+
+    const card = document.createElement("scene-studio-card");
+    card.setConfig({
+      type: "custom:scene-studio-card",
+      collapsed_by_default: false,
+      ...(scenario.cardConfig ?? {}),
+    });
+
+    // Capture every fired UI command verbatim, in order, alongside the mock's
+    // applied mutation — the interaction script asserts against this list
+    // rather than re-deriving state from screenshots.
+    window.__firedCommands = [];
+    const hass = createMockHass(scenario, { onRender: () => (card.hass = { ...card.hass }) });
+    const realCallApi = hass.callApi.bind(hass);
+    hass.callApi = async (method, path, payload) => {
+      window.__firedCommands.push(payload);
+      return realCallApi(method, path, payload);
+    };
+    // Direct HA light services (the live brightness trim) are captured the
+    // same way — domain/service/data verbatim, in order.
+    window.__firedServiceCalls = [];
+    const realCallService = hass.callService.bind(hass);
+    hass.callService = async (domain, service, data) => {
+      window.__firedServiceCalls.push({ domain, service, data });
+      return realCallService(domain, service, data);
+    };
+    card.hass = hass;
+    document.body.appendChild(card);
+    // Scroll runway AFTER the card: the dashboard always scrolls, and the
+    // popover contract (close-on-scroll) needs scrollable room below.
+    const runway = document.createElement("div");
+    runway.style.height = "1400px";
+    document.body.appendChild(runway);
+    window.__card = card;
+    card.updateComplete.then(() => {
+      window.__cardReady = true;
+    });
+  </script>
+</body>
+</html>

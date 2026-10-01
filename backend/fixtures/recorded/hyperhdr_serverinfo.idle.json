@@ -1,0 +1,26 @@
+{
+  "_recorded": "hyperHDR v21.0.0.0 idle shape: the flatbuffer priority entry has disappeared (or dropped to inactive), no active+visible input priority — this is the 'surrendered' state that clears holds and triggers the pending static-scene auto-restore. Shape recorded 2026-09-24 for the external light-sync contention pass.",
+  "info": {
+    "activeEffects": [],
+    "activeLedColor": [],
+    "components": [
+      {"enabled": true, "name": "ALL"},
+      {"enabled": true, "name": "SMOOTHING"},
+      {"enabled": true, "name": "BLACKBORDER"},
+      {"enabled": false, "name": "FORWARDER"},
+      {"enabled": true, "name": "VIDEOGRABBER"},
+      {"enabled": false, "name": "SYSTEMGRABBER"},
+      {"enabled": true, "name": "LEDDEVICE"}
+    ],
+    "currentInstance": 0,
+    "instance": [
+      {"friendly_name": "Workstation WLED Instance", "instance": 0, "running": true},
+      {"friendly_name": "Workstation HUE Instance", "instance": 1, "running": true}
+    ],
+    "priorities": [
+      {"active": false, "componentId": "VIDEOGRABBER", "origin": "System", "priority": 240, "visible": false}
+    ],
+    "priorities_autoselect": true,
+    "videomodehdr": "SDR"
+  }
+}

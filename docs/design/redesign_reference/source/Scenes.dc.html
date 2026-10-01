@@ -1,0 +1,157 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    :root{
+      --bg:#101318; --surface:#181d24; --surface-2:#20262f;
+      --border:#2b333e; --border-soft:#232a34;
+      --text:#e7ebf1; --text-dim:#98a2b0; --text-faint:#6d7684;
+      --ok:#43b971; --ok-dim:rgba(67,185,113,.16);
+      --warn:#e0a83a; --warn-dim:rgba(224,168,58,.16);
+      --err:#e05d5d; --err-dim:rgba(224,93,93,.16);
+      --idle:#8a93a0; --idle-dim:rgba(138,147,160,.14);
+      --accent:#5b8def;
+      --radius-lg:14px; --radius:10px; --radius-sm:6px;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;}
+    a{color:var(--accent);} a:hover{color:#82abf5;}
+    .shell{min-height:820px;background:var(--bg);color:var(--text);font-family:"Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;}
+    .top{display:flex;align-items:center;gap:14px;padding:18px 40px;border-bottom:1px solid var(--border-soft);}
+    .wordmark{font-size:15px;font-weight:600;margin:0;}
+    .tag{font-size:11px;color:var(--text-faint);border:1px solid var(--border);border-radius:4px;padding:2px 7px;}
+    .spacer{flex:1;}
+    .status-pill{display:flex;align-items:center;gap:7px;border-radius:999px;padding:7px 14px;font-size:12px;font-weight:600;border:none;background:var(--err-dim);color:var(--err);}
+    .status-dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+    .icon-btn{position:relative;width:34px;height:34px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);color:var(--text-dim);display:flex;align-items:center;justify-content:center;}
+    .badge{position:absolute;top:-5px;right:-5px;background:var(--warn);color:#241a02;font-size:10px;font-weight:700;border-radius:999px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 3px;}
+    .conn-dot{position:absolute;bottom:2px;right:2px;width:7px;height:7px;border-radius:50%;background:var(--err);border:2px solid var(--surface);}
+    .tabs{display:flex;gap:4px;padding:0 40px;border-bottom:1px solid var(--border-soft);}
+    .tabs button{padding:13px 14px;font-size:13px;color:var(--text-dim);background:none;border:none;border-bottom:2px solid transparent;font-family:inherit;}
+    .tabs button.active{color:var(--text);border-bottom-color:var(--accent);font-weight:600;}
+    .content{padding:24px 40px 48px;max-width:1360px;}
+    .list-meta{font-size:12px;color:var(--text-faint);margin-bottom:14px;}
+    .list{display:flex;flex-direction:column;gap:8px;}
+    .row{display:flex;align-items:center;gap:16px;padding:14px 16px;background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius);border-left:3px solid var(--ok);}
+    .row.dim{opacity:.55;}
+    .identity{display:flex;align-items:center;gap:12px;width:270px;flex:none;}
+    .band{width:64px;height:22px;border-radius:6px;flex:none;}
+    .id-text{min-width:0;}
+    .id-name{display:flex;align-items:center;flex-wrap:wrap;row-gap:3px;gap:7px;font-size:14px;font-weight:600;}
+    .id-room{font-size:12px;color:var(--text-faint);margin-top:1px;}
+    .live-tag{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--ok);background:var(--ok-dim);border-radius:4px;padding:2px 6px;}
+    .live-dot{width:5px;height:5px;border-radius:50%;background:var(--ok);animation:pulse 2.4s ease-in-out infinite;}
+    @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+    .mode-glyph{display:flex;align-items:center;color:var(--text-faint);flex:none;width:20px;}
+    .fidelity{flex:1;min-width:0;font-size:12px;color:var(--text-dim);}
+    .fidelity strong{color:var(--text);font-weight:600;}
+    .fidelity .approx{color:var(--warn);}
+    .actions{display:flex;align-items:center;gap:6px;flex:none;}
+    .icon-action{width:30px;height:30px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);display:flex;align-items:center;justify-content:center;}
+    .icon-action.primary{color:var(--text);border-color:#3a4453;}
+    .session-pill{font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:6px;padding:0 6px;}
+    .disclosure{margin-top:18px;}
+    .disclosure-head{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-faint);font-weight:600;padding:8px 4px;}
+  </style>
+</helmet>
+<div class="shell">
+  <header class="top">
+    <h1 class="wordmark">Scene Studio Workbench</h1>
+    <span class="tag">mock</span>
+    <div class="spacer"></div>
+    <button class="status-pill"><span class="status-dot"></span>7 issues</button>
+    <button class="icon-btn" title="Discovery inbox">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v11l-3 5H7l-3-5z"/><path d="M4 15h4l2 3h4l2-3h4"/></svg>
+      <span class="badge">8</span>
+    </button>
+    <button class="icon-btn" title="System">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.6 1z"/></svg>
+      <span class="conn-dot"></span>
+    </button>
+  </header>
+  <nav class="tabs">
+    <button>Overview</button>
+    <button class="active">Scenes</button>
+    <button>Fixtures</button>
+  </nav>
+  <div class="content">
+    <div class="list-meta">Sorted: active first, archived last · row actions apply immediately</div>
+    <div class="list">
+      <div class="row">
+        <div class="identity">
+          <div class="band" style="background:linear-gradient(90deg,#1a237e,#4527a0,#7b1fa2,#ff8f00);"></div>
+          <div class="id-text">
+            <div class="id-name">Twilight</div>
+            <div class="id-room">Studio</div>
+          </div>
+        </div>
+        <span class="mode-glyph" title="Static">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>
+        </span>
+        <div class="fidelity"><strong>12/13</strong> ready · 9 native · <span class="approx">4 approximate</span></div>
+        <div class="actions">
+          <button class="icon-action primary" title="Apply">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="13 2 4 14 12 14 11 22 20 10 12 10 13 2"/></svg>
+          </button>
+          <button class="icon-action" title="More">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="row" style="border-left-color:var(--ok);">
+        <div class="identity">
+          <div class="band" style="background:linear-gradient(90deg,#00e5ff,#2979ff,#7c4dff,#00c853);"></div>
+          <div class="id-text">
+            <div class="id-name">Aurora Flow <span class="live-tag"><span class="live-dot"></span>LIVE · 2</span></div>
+            <div class="id-room">Studio</div>
+          </div>
+        </div>
+        <span class="mode-glyph" title="Dynamic">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 12 7 12 9 5 13 19 15 12 22 12"/></svg>
+        </span>
+        <div class="fidelity"><strong>12/13</strong> ready · 6 native · <span class="approx">6 approximate</span></div>
+        <div class="actions">
+          <span class="session-pill" title="Two concurrent sessions — manage each from Overview or the session inspector">2 sessions</span>
+          <button class="icon-action" title="More">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="disclosure">
+      <div class="disclosure-head">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        Archived (1)
+      </div>
+      <div class="list">
+        <div class="row dim" style="border-left-color:var(--idle);">
+          <div class="identity">
+            <div class="band" style="background:linear-gradient(90deg,#0d47a1,#2962ff);"></div>
+            <div class="id-text">
+              <div class="id-name">Meeting Blue</div>
+              <div class="id-room">Office</div>
+            </div>
+          </div>
+          <span class="mode-glyph" title="Static">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>
+          </span>
+          <div class="fidelity"><strong>2/2</strong> ready · 2 native</div>
+          <div class="actions">
+            <button class="icon-action" title="Restore" style="width:auto;padding:0 12px;font-size:12px;font-weight:600;color:var(--text-dim);">Restore</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

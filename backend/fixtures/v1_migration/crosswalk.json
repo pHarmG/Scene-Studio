@@ -1,0 +1,90 @@
+{
+  "hue": {
+    "light.hue_g_strip": {
+      "hue_friendly_name": "Hue G Strip",
+      "hue_resource_id": "2a2c45a9-8a61-4c04-bdaf-9bd928f9316a",
+      "hue_type": "gradient",
+      "room": "Studio"
+    },
+    "light.middle": {
+      "hue_friendly_name": "Middle Bar",
+      "hue_resource_id": "68ad5817-0907-4811-9a5c-e3a1d4a69803",
+      "hue_type": "single",
+      "room": "Studio"
+    },
+    "light.lamp": {
+      "hue_friendly_name": "Lamp",
+      "hue_resource_id": "73acf87a-8835-435d-b422-e889c5017dac",
+      "hue_type": "single",
+      "room": "Studio"
+    },
+    "light.left": {
+      "hue_friendly_name": "Lower Bar",
+      "hue_resource_id": "8e687c33-b45c-457e-92f6-0499fd7141eb",
+      "hue_type": "single",
+      "room": "Studio"
+    },
+    "light.double_strip": {
+      "hue_friendly_name": "Double Strip",
+      "hue_resource_id": "b55f34cf-ce41-476b-a30e-44ab4972f0c1",
+      "hue_type": "single",
+      "room": "Studio"
+    },
+    "light.right": {
+      "hue_friendly_name": "Upper Bar",
+      "hue_resource_id": "d81298a8-0ae6-4b85-9fbd-bc7eaac50898",
+      "hue_type": "single",
+      "room": "Studio"
+    },
+    "light.custom_gradient": {
+      "hue_friendly_name": "Custom Gradient",
+      "hue_resource_id": "f54ec7de-77b1-4bdf-b12f-f5c083733006",
+      "hue_type": "single",
+      "room": "Studio"
+    },
+    "light.office_strip": {
+      "hue_friendly_name": "Office Strip",
+      "hue_resource_id": "ffaed708-d411-455e-843b-8bebae36f67c",
+      "hue_type": "single",
+      "room": "Studio"
+    }
+  },
+  "wled": {
+    "light.lg_wled_segment_0": {
+      "segment_label": "Segment 0",
+      "ip": "192.0.2.20",
+      "start": 0,
+      "stop": 5
+    },
+    "light.lg_wled_segment_1": {
+      "segment_label": "Segment 1",
+      "ip": "192.0.2.20",
+      "start": 5,
+      "stop": 10
+    },
+    "light.lg_wled_segment_2": {
+      "segment_label": "Segment 2",
+      "ip": "192.0.2.20",
+      "start": 10,
+      "stop": 15
+    },
+    "light.lg_wled_segment_3": {
+      "segment_label": "Segment 3",
+      "ip": "192.0.2.20",
+      "start": 15,
+      "stop": 20
+    },
+    "light.lg_wled_segment_4": {
+      "segment_label": "Segment 4",
+      "ip": "192.0.2.20",
+      "start": 20,
+      "stop": 25
+    },
+    "light.lg_wled_segment_5": {
+      "segment_label": "Segment 5",
+      "ip": "192.0.2.20",
+      "start": 25,
+      "stop": 30
+    }
+  }
+}

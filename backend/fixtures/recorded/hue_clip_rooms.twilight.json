@@ -1,0 +1,36 @@
+{
+  "data": [
+    {
+      "id": "room-001",
+      "metadata": {
+        "name": "Studio"
+      },
+      "children": [
+        {
+          "rid": "fe67ac77-2d0e-47bc-bd29-fed981383175",
+          "rtype": "device"
+        },
+        {
+          "rid": "3b8cf036-59f3-46fb-8d39-a44434a3f4b3",
+          "rtype": "device"
+        },
+        {
+          "rid": "45b4e07c-5c6e-4663-b74f-3aa14aee6a9b",
+          "rtype": "device"
+        }
+      ]
+    },
+    {
+      "id": "room-002",
+      "metadata": {
+        "name": "Bathroom"
+      },
+      "children": [
+        {
+          "rid": "dd940b35-0830-4949-b018-39864c0e389d",
+          "rtype": "device"
+        }
+      ]
+    }
+  ]
+}

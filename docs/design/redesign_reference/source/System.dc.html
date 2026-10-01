@@ -1,0 +1,170 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    :root{
+      --bg:#101318; --surface:#181d24; --surface-2:#20262f; --surface-3:#14181e;
+      --border:#2b333e; --border-soft:#232a34;
+      --text:#e7ebf1; --text-dim:#98a2b0; --text-faint:#6d7684;
+      --ok:#43b971; --ok-dim:rgba(67,185,113,.16);
+      --warn:#e0a83a; --warn-dim:rgba(224,168,58,.16);
+      --err:#e05d5d; --err-dim:rgba(224,93,93,.16);
+      --idle:#8a93a0; --idle-dim:rgba(138,147,160,.14);
+      --accent:#5b8def;
+      --radius-lg:14px; --radius:10px; --radius-sm:6px;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;}
+    a{color:var(--accent);} a:hover{color:#82abf5;}
+    .shell{position:relative;min-height:900px;background:var(--bg);color:var(--text);font-family:"Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;overflow:hidden;}
+    .backdrop{filter:blur(1px) brightness(.7);}
+    .top{display:flex;align-items:center;gap:14px;padding:18px 40px;border-bottom:1px solid var(--border-soft);}
+    .wordmark{font-size:15px;font-weight:600;margin:0;}
+    .tag{font-size:11px;color:var(--text-faint);border:1px solid var(--border);border-radius:4px;padding:2px 7px;}
+    .spacer{flex:1;}
+    .status-pill{display:flex;align-items:center;gap:7px;border-radius:999px;padding:7px 14px;font-size:12px;font-weight:600;border:none;background:var(--ok-dim);color:var(--ok);}
+    .status-dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+    .icon-btn{position:relative;width:34px;height:34px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);color:var(--text-dim);display:flex;align-items:center;justify-content:center;}
+    .conn-dot{position:absolute;bottom:2px;right:2px;width:7px;height:7px;border-radius:50%;background:var(--ok);border:2px solid var(--surface);}
+    .tabs{display:flex;gap:4px;padding:0 40px;border-bottom:1px solid var(--border-soft);}
+    .tabs button{padding:13px 14px;font-size:13px;color:var(--text-dim);background:none;border:none;border-bottom:2px solid transparent;font-family:inherit;}
+    .tabs button.active{color:var(--text);border-bottom-color:var(--accent);font-weight:600;}
+    .content{padding:24px 40px;max-width:1360px;}
+    .panel{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius-lg);padding:18px 20px;max-width:520px;}
+    .panel-label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint);font-weight:700;margin-bottom:10px;}
+    .fleet-line{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border-soft);font-size:13px;}
+
+    .scrim{position:absolute;inset:0;background:rgba(6,8,11,.55);}
+    .drawer{position:absolute;top:0;right:0;bottom:0;width:420px;background:var(--surface);border-left:1px solid var(--border-soft);box-shadow:-24px 0 48px rgba(0,0,0,.35);display:flex;flex-direction:column;}
+    .dr-head{display:flex;align-items:center;justify-content:space-between;padding:22px 24px 16px;}
+    .dr-title{font-size:20px;font-weight:600;}
+    .dr-close{width:28px;height:28px;border-radius:var(--radius-sm);border:1px solid var(--border);background:none;color:var(--text-dim);display:flex;align-items:center;justify-content:center;}
+    .dr-body{flex:1;overflow-y:auto;padding:0 24px 24px;}
+    .dr-section{padding:16px 0;border-top:1px solid var(--border-soft);}
+    .dr-section:first-child{border-top:none;}
+    .dr-section-title{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint);font-weight:700;margin-bottom:10px;}
+    .conn-row{display:flex;align-items:center;gap:10px;}
+    .seg{display:flex;border:1px solid var(--border);border-radius:999px;overflow:hidden;}
+    .seg button{padding:6px 14px;font-size:12px;font-weight:600;color:var(--text-dim);background:var(--surface-2);border:none;font-family:inherit;}
+    .seg button.active{background:var(--accent);color:#0c1420;}
+    .field-label{font-size:12px;color:var(--text-dim);margin-bottom:6px;}
+    .select{width:100%;padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:13px;font-family:inherit;}
+    .policy-facts{display:flex;flex-direction:column;gap:8px;font-size:13px;}
+    .pf-row{display:flex;justify-content:space-between;}
+    .pf-row .k{color:var(--text-dim);}
+    .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px;}
+    .chip{font-size:10px;font-family:ui-monospace,"Cascadia Code",Consolas,monospace;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--text-dim);}
+    .diag{background:var(--surface-3);border-radius:var(--radius);padding:12px 14px;}
+    .diag-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-soft);}
+    .diag-item:last-child{border-bottom:none;}
+    .diag-dot{width:6px;height:6px;border-radius:50%;margin-top:5px;flex:none;}
+    .diag-time{font-family:ui-monospace,"Cascadia Code",Consolas,monospace;font-size:11px;color:var(--text-faint);width:40px;flex:none;}
+    .diag-text{font-size:12px;}
+    .diag-sub{font-size:11px;color:var(--text-faint);font-family:ui-monospace,"Cascadia Code",Consolas,monospace;margin-top:2px;}
+    .export-btn{width:100%;margin-top:10px;padding:9px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);font-size:12px;font-weight:600;font-family:inherit;}
+  </style>
+</helmet>
+<div class="shell">
+  <div class="backdrop">
+    <header class="top">
+      <h1 class="wordmark">Scene Studio Workbench</h1>
+      <span class="tag">mock</span>
+      <div class="spacer"></div>
+      <button class="status-pill"><span class="status-dot"></span>All systems normal</button>
+      <button class="icon-btn" title="Discovery inbox">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v11l-3 5H7l-3-5z"/><path d="M4 15h4l2 3h4l2-3h4"/></svg>
+      </button>
+      <button class="icon-btn" title="System" style="color:var(--text);border-color:var(--accent);">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.6 1z"/></svg>
+        <span class="conn-dot"></span>
+      </button>
+    </header>
+    <nav class="tabs">
+      <button class="active">Overview</button>
+      <button>Scenes</button>
+      <button>Fixtures</button>
+    </nav>
+    <div class="content">
+      <div class="panel">
+        <div class="panel-label">Engine</div>
+        <div class="fleet-line"><span>Scene Studio (mock) · rev 1</span><span style="color:var(--ok);font-weight:600;">healthy</span></div>
+        <div class="fleet-line"><span>Fixtures ready</span><span style="font-weight:600;">25/25</span></div>
+        <div class="fleet-line" style="border-bottom:none;"><span>Playback</span><span style="font-weight:600;">idle</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="scrim"></div>
+  <div class="drawer">
+    <div class="dr-head">
+      <div class="dr-title">System</div>
+      <button class="dr-close">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="dr-body">
+      <div class="dr-section">
+        <div class="dr-section-title">Connection</div>
+        <div class="conn-row">
+          <div class="seg"><button class="active">Mock</button><button>Live URL</button></div>
+        </div>
+      </div>
+      <div class="dr-section">
+        <div class="dr-section-title">Scenario <span style="text-transform:none;color:var(--text-faint);font-weight:500;">· mock only</span></div>
+        <div class="field-label">Mock scenario</div>
+        <select class="select"><option>All healthy</option></select>
+      </div>
+      <div class="dr-section">
+        <div class="dr-section-title">Runtime policy</div>
+        <div class="policy-facts">
+          <div class="pf-row"><span class="k">Mode</span><span>normal</span></div>
+          <div class="pf-row"><span class="k">Read-only</span><span>no</span></div>
+          <div class="pf-row">
+            <span class="k">Allowed commands</span>
+          </div>
+          <div class="chips">
+            <span class="chip">scene.apply</span><span class="chip">scene.archive</span><span class="chip">scene.preview</span>
+            <span class="chip">playback.start</span><span class="chip">playback.pause</span><span class="chip">playback.stop</span>
+            <span class="chip">fixture.enable</span><span class="chip">fixture.rebind</span><span class="chip">discovery.run</span>
+          </div>
+        </div>
+      </div>
+      <div class="dr-section">
+        <div class="dr-section-title">Diagnostics</div>
+        <div class="diag">
+          <div class="diag-item">
+            <span class="diag-dot" style="background:var(--ok);"></span>
+            <div>
+              <div class="diag-text">Twilight started</div>
+              <div class="diag-sub">21:04 · 12 fixtures · static</div>
+            </div>
+          </div>
+          <div class="diag-item">
+            <span class="diag-dot" style="background:var(--ok);"></span>
+            <div>
+              <div class="diag-text">Discovery completed</div>
+              <div class="diag-sub">20:58 · 0 changes detected</div>
+            </div>
+          </div>
+          <div class="diag-item">
+            <span class="diag-dot" style="background:var(--ok);"></span>
+            <div>
+              <div class="diag-text">Scene Studio engine started</div>
+              <div class="diag-sub">20:41 · mock client · contracts v1</div>
+            </div>
+          </div>
+        </div>
+        <button class="export-btn">Export sanitized snapshot</button>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

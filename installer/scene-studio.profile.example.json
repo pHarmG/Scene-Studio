@@ -1,0 +1,31 @@
+{
+  "ha_url": "http://homeassistant.local:8123",
+  "ha_ssh_host": "homeassistant",
+  "appdaemon_config_root": "/addon_configs/REPLACE_ME_addon_slug",
+  "store_root": "/config/scene_studio_store",
+  "runtime_mode": "registry_admin",
+  "providers": {
+    "hue": {
+      "enabled": false,
+      "host": null,
+      "application_key_secret": "hue_app_key",
+      "bridge_id": null
+    },
+    "wled": {
+      "enabled": false,
+      "hosts": []
+    },
+    "ha_light": {
+      "enabled": true,
+      "ignored_entity_ids": []
+    }
+  },
+  "integrations": {
+    "hyperhdr": {
+      "enabled": false,
+      "host": null,
+      "default_policy": "yield",
+      "probe_ttl_seconds": 5
+    }
+  }
+}

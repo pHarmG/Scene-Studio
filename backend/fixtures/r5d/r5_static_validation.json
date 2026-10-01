@@ -1,0 +1,29 @@
+{
+  "schema_version": 2,
+  "id": "r5_static_validation",
+  "name": "R5 Static Validation",
+  "target_ids": ["g_strip", "wled_seg_0"],
+  "brightness": 45.0,
+  "motion": {
+    "mode": "static",
+    "speed": 0.0,
+    "strategy": "static"
+  },
+  "fixture_states": {
+    "g_strip": {
+      "on": true,
+      "brightness": 45.0,
+      "gradient": ["#3311aa", "#00aacc"]
+    },
+    "wled_seg_0": {
+      "on": true,
+      "brightness": 45.0,
+      "color": "#1010aa"
+    }
+  },
+  "metadata": {
+    "origin": "authored",
+    "tags": ["r5d-validation", "temporary"],
+    "note": "Temporary R5D static scene for apply-cancels-playback and stale-freeze-clearance proof; remove after R5D exit."
+  }
+}

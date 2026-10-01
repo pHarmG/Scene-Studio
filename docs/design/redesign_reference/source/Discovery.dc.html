@@ -1,0 +1,166 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    :root{
+      --bg:#101318; --surface:#181d24; --surface-2:#20262f;
+      --border:#2b333e; --border-soft:#232a34;
+      --text:#e7ebf1; --text-dim:#98a2b0; --text-faint:#6d7684;
+      --ok:#43b971; --ok-dim:rgba(67,185,113,.16);
+      --warn:#e0a83a; --warn-dim:rgba(224,168,58,.16);
+      --err:#e05d5d; --err-dim:rgba(224,93,93,.16);
+      --idle:#8a93a0; --idle-dim:rgba(138,147,160,.14);
+      --accent:#5b8def;
+      --radius-lg:14px; --radius:10px; --radius-sm:6px;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;}
+    a{color:var(--accent);} a:hover{color:#82abf5;}
+    .shell{min-height:1040px;background:var(--bg);color:var(--text);font-family:"Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;}
+    .top{display:flex;align-items:center;gap:14px;padding:18px 40px;border-bottom:1px solid var(--border-soft);}
+    .wordmark{font-size:15px;font-weight:600;margin:0;}
+    .tag{font-size:11px;color:var(--text-faint);border:1px solid var(--border);border-radius:4px;padding:2px 7px;}
+    .spacer{flex:1;}
+    .status-pill{display:flex;align-items:center;gap:7px;border-radius:999px;padding:7px 14px;font-size:12px;font-weight:600;border:none;background:var(--err-dim);color:var(--err);}
+    .status-dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+    .icon-btn{position:relative;width:34px;height:34px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);color:var(--text-dim);display:flex;align-items:center;justify-content:center;}
+    .icon-btn.active{border-color:var(--accent);color:var(--text);}
+    .badge{position:absolute;top:-5px;right:-5px;background:var(--warn);color:#241a02;font-size:10px;font-weight:700;border-radius:999px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 3px;}
+    .conn-dot{position:absolute;bottom:2px;right:2px;width:7px;height:7px;border-radius:50%;background:var(--err);border:2px solid var(--surface);}
+    .tabs{display:flex;gap:4px;padding:0 40px;border-bottom:1px solid var(--border-soft);}
+    .tabs button{padding:13px 14px;font-size:13px;color:var(--text-dim);background:none;border:none;border-bottom:2px solid transparent;font-family:inherit;}
+    .content{padding:24px 40px 48px;max-width:1360px;}
+    .dhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+    .dtitle{font-size:20px;font-weight:600;}
+    .ghost-btn{display:flex;align-items:center;gap:7px;padding:8px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);background:none;color:var(--text-dim);font-size:12px;font-weight:600;font-family:inherit;}
+    .ghost-btn:hover{color:var(--text);border-color:#3a4453;}
+    .dmeta{font-size:12px;color:var(--text-faint);margin-bottom:22px;}
+    .section{margin-bottom:10px;}
+    .section-head{display:flex;align-items:center;gap:8px;padding:8px 4px;font-size:12px;font-weight:700;color:var(--text-dim);}
+    .section-count{font-weight:600;border-radius:999px;padding:1px 8px;font-size:11px;}
+    .section-count.err{background:var(--err-dim);color:var(--err);}
+    .section-count.warn{background:var(--warn-dim);color:var(--warn);}
+    .section-count.idle{background:var(--idle-dim);color:var(--idle);}
+    .section-body{display:flex;flex-direction:column;gap:6px;}
+    .entry{display:flex;align-items:center;gap:14px;padding:12px 16px;background:var(--surface);border-radius:var(--radius);border-left:3px solid var(--err);}
+    .entry.warn{border-left-color:var(--warn);}
+    .entry.idle{border-left-color:var(--idle);background:var(--surface-2);}
+    .ename{width:200px;flex:none;font-size:13px;font-weight:600;}
+    .estatus{width:150px;flex:none;font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.03em;}
+    .ereason{flex:1;font-size:12px;color:var(--text-dim);}
+    .eactions{display:flex;gap:6px;flex:none;}
+    .eaction{padding:6px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);font-size:11px;font-weight:600;font-family:inherit;}
+  </style>
+</helmet>
+<div class="shell">
+  <header class="top">
+    <h1 class="wordmark">Scene Studio Workbench</h1>
+    <span class="tag">mock</span>
+    <div class="spacer"></div>
+    <button class="status-pill"><span class="status-dot"></span>7 issues</button>
+    <button class="icon-btn active" title="Discovery inbox">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v11l-3 5H7l-3-5z"/><path d="M4 15h4l2 3h4l2-3h4"/></svg>
+      <span class="badge">8</span>
+    </button>
+    <button class="icon-btn" title="System" style="color:var(--text-dim);">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.6 1z"/></svg>
+      <span class="conn-dot"></span>
+    </button>
+  </header>
+  <nav class="tabs">
+    <button>Overview</button>
+    <button>Scenes</button>
+    <button>Fixtures</button>
+  </nav>
+  <div class="content">
+    <div class="dhead">
+      <div class="dtitle">Discovery</div>
+      <button class="ghost-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Run discovery
+      </button>
+    </div>
+    <div class="dmeta">15 unchanged · run 2026-09-10 19:05</div>
+
+    <div class="section">
+      <div class="section-head">Candidates to review <span class="section-count warn">2</span></div>
+      <div class="section-body">
+        <div class="entry warn">
+          <span class="ename">Double Strip</span>
+          <span class="estatus">candidate_replacement</span>
+          <span class="ereason">previous binding missing; an incompatible candidate is available — review before rebinding</span>
+          <div class="eactions">
+            <button class="eaction">Rebind</button>
+            <button class="eaction">Leave unbound</button>
+          </div>
+        </div>
+        <div class="entry warn">
+          <span class="ename">Custom Gradient</span>
+          <span class="estatus">bound_degraded</span>
+          <span class="ereason">live-verified 2026-09-11: no gradient capability reported — treat as a plain color light</span>
+          <div class="eactions">
+            <button class="eaction">Retry</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">Missing to resolve <span class="section-count err">6</span></div>
+      <div class="section-body">
+        <div class="entry">
+          <span class="ename">WLED Segment 0–5</span>
+          <span class="estatus">missing · 6</span>
+          <span class="ereason">bound resource not observed; binding retained — provider wled offline</span>
+          <div class="eactions">
+            <button class="eaction">Retry</button>
+            <button class="eaction">Disable</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">New / unbound resources <span class="section-count idle">7</span></div>
+      <div class="section-body">
+        <div class="entry idle">
+          <span class="ename">Unknown Gradient Strip</span>
+          <span class="estatus">available_unbound</span>
+          <span class="ereason">new resource with no matching fixture</span>
+          <div class="eactions">
+            <button class="eaction">Leave unbound</button>
+          </div>
+        </div>
+        <div class="entry idle">
+          <span class="ename">WLED Segment 0–5</span>
+          <span class="estatus">available_unbound · 6</span>
+          <span class="ereason">new resources reported with no fixture, mirrors the missing bindings above</span>
+          <div class="eactions">
+            <button class="eaction">Leave unbound</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head">Disabled <span class="section-count idle">2</span></div>
+      <div class="section-body">
+        <div class="entry idle">
+          <span class="ename" style="white-space:nowrap;">Water Light, Food Light</span>
+          <span class="estatus">disabled</span>
+          <span class="ereason">administratively disabled; discovery skipped provider lookup</span>
+          <div class="eactions"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

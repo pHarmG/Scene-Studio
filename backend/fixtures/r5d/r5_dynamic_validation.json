@@ -1,0 +1,35 @@
+{
+  "schema_version": 2,
+  "id": "r5_dynamic_validation",
+  "name": "R5 Dynamic Validation",
+  "target_ids": ["g_strip", "wled_seg_0"],
+  "palette": ["#ff0044", "#ffaa00", "#7fff00"],
+  "brightness": 65.0,
+  "motion": {
+    "mode": "palette_cycle",
+    "speed": 0.5,
+    "strategy": "auto"
+  },
+  "fixture_states": {
+    "g_strip": {
+      "on": true,
+      "brightness": 70.0,
+      "gradient": ["#ff0044", "#ffaa00", "#7fff00"]
+    },
+    "wled_seg_0": {
+      "on": true,
+      "brightness": 60.0,
+      "effect": "Rainbow",
+      "provider_ext": {
+        "wled": {
+          "pal": "Party"
+        }
+      }
+    }
+  },
+  "metadata": {
+    "origin": "authored",
+    "tags": ["r5d-validation", "temporary"],
+    "note": "Temporary R5D live-validation scene; remove after R5D exit. Targets only the initial allowlisted fixtures g_strip + wled_seg_0."
+  }
+}

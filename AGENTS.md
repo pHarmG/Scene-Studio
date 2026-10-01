@@ -1,0 +1,130 @@
+# Scene Studio — Agent Guide
+
+Scene Studio is a provider-neutral lighting-scene product for Home Assistant:
+a Python domain core + command engine (AppDaemon-hosted), a static Workbench
+SPA for authoring, an optional Lovelace control card, and a guided installer
+for fresh installs and upgrades.
+
+Source of truth: **this repository** (`pHarmG/Scene-Studio`, local workspace
+`D:\Scene-Studio`). The project was extracted from the `pHarmG/Home-Tech`
+monorepo; see `docs/MIGRATION_FROM_HOME_TECH.md`. Do **not** recreate or edit
+Scene Studio implementation in Home-Tech.
+
+## Layout
+
+| Path | What it is |
+| --- | --- |
+| `backend/` | Python package (`src/scene_studio`), fixtures, full test suite. Stdlib-only core; the AppDaemon adapter lazily imports `requests` + AppDaemon. |
+| `workbench/` | Static authoring SPA (Vite + Lit). `npm run build|smoke|browser`. Mocks mirror `backend/fixtures/*.sample.json`. |
+| `home-assistant/scene-studio-card/` | Optional Lovelace card (`custom:scene-studio-card`; `test-bench-scene-controls-card` is a compatibility alias). Build: `npm run build`, tests: `npm test`. |
+| `installer/` | Guided wizard (`Install-SceneStudio.ps1`), internal installer, deployers, profile tool, manifest verifier. |
+| `scripts/` | `build_release.py` (release ZIP packager), `security/scan_secrets.py` (secret scanner — run before every commit). |
+| `tests/` | Cross-cutting/installer acceptance support. |
+| `docs/` | `architecture/`, `development/`, `installation/`, `operations/`, `design/`. |
+
+## Ownership boundaries
+
+- **Backend** (`backend/src/scene_studio`): domain, stores, discovery,
+  renderers, command service, AppDaemon adapter. Scene authoring logic lives
+  here — never in Lovelace.
+- **Workbench** (`workbench/`): the ONLY authoring surface. Consumes the
+  backend HTTP/AppDaemon API; its mock layer mirrors backend fixtures.
+- **HA card** (`home-assistant/scene-studio-card/`): a daily CONTROLLER
+  (select/apply/playback/brightness trim/archive) over the canonical
+  projection + command bridge (`sensor.scene_studio_ui`,
+  `scene_studio_ui_command`). It never authors scenes and never touches
+  providers directly.
+- **Installer** (`installer/`): the only code that writes to a target
+  Home Assistant/AppDaemon host. Deployers keep backup → stage → hash-verify
+  → activate → health-check → rollback semantics; do not bypass them.
+
+## Standard commands
+
+```powershell
+# backend tests (from backend/ or repo root)
+python -m pytest backend/tests -q
+
+# workbench (from workbench/)
+npm install && npm run smoke && npm run build && npm run browser
+
+# HA card (from home-assistant/scene-studio-card/)
+npm install && npm run build && npm run typecheck && npm test
+
+# release ZIP (from repo root)
+python scripts/build_release.py --refresh --zip
+
+# secret scan (required before every commit)
+python scripts/security/scan_secrets.py
+```
+
+## Installer architecture
+
+- `Install-SceneStudio.ps1` (wizard): asks plain questions, probes read-only,
+  shows a review, then drives `installer/install_scene_studio.ps1` and the
+  two deployers. Models **three independent endpoints**: HA API URL, AppDaemon
+  ssh target, and the Scene Studio/AppDaemon HTTP endpoint (inferred from the
+  ssh target + port 5050, tested, asked only when inference fails). HA Core
+  and AppDaemon do not have to share a host.
+- The wizard writes only: a marker-delimited `scene_studio` block in
+  `apps.yaml`, optionally a named secret in `secrets.yaml` (values never
+  displayed), the backend/Workbench trees via the deployers, and — if opted
+  in — the prebuilt card into `/config/www/scene-studio-card/` (it never
+  modifies a dashboard).
+- Fresh installs must come up in `registry_admin` (provider writes blocked);
+  upgrades preserve the live runtime mode.
+- Deployment profiles are validated by `installer/scene_studio_profile.py`
+  (validate / resolve / render-apps-yaml). Secrets stay NAMES there, never
+  values.
+- `installer/verify_bundle_manifest.ps1` gates release trees byte-exactly.
+
+## Deployment safety rules
+
+- **PowerShell 7 only** for every installer/deployer: PS 5.1 strips embedded
+  quotes when marshalling ssh arguments and corrupts remote JSON payloads.
+- All remote writes are opt-in (`-Apply`) and gated: read-only state
+  classification first, backups before every replace, hash verification after
+  staging AND activation, automatic rollback on failed health checks. Fresh
+  installs quarantine to the absent state.
+- Deployers never touch `apps.yaml`, stores, dashboards, or HA Core config.
+- Never store HA tokens or provider keys in tracked files, profiles, or the
+  answers file — environment variables only (`SCENE_STUDIO_HA_TOKEN`,
+  `SCENE_STUDIO_HUE_APP_KEY`).
+
+## Local environment discovery
+
+**When `.scene-studio.local.json` exists in the repo root, treat it as the
+authoritative local development/deployment topology.** It is machine-specific
+and must never be committed (it is gitignored). `.scene-studio.local.example.json`
+is the tracked placeholder template. The local profile may contain this
+house's real hosts/aliases; generic code must never hardcode them. Tokens and
+keys do NOT belong there — read them from the environment.
+
+Read `.scene-studio.local.json` before working against the real environment;
+if it is absent, ask the user or work in mock/dev mode only.
+
+## HA write policy (mandatory)
+
+1. **Read-only first**: inspect the live state (status APIs, `-VerifyOnly`
+   deployer mode, profile preflight) before proposing any write.
+2. **Explicit approval**: an agent may run any `-Apply` / wizard install
+   against a live host only after the user has explicitly approved THAT write
+   in the conversation. Present the exact intended change (files, paths,
+   restart effect) as part of the approval request. A general "go ahead"
+   covers only the change described when it was given.
+3. **Minimal change set + immediate verification** after every approved write;
+   the deployers' health checks are part of the write, not optional.
+
+## Environment classes
+
+- **Local development**: mock-mode Workbench (`npm run dev`), devserver
+  (`python -m scene_studio.devserver --seed-demo`), unit/interaction tests.
+  No HA contact.
+- **Friend installation**: the release ZIP (GitHub Releases) or a clone +
+  `pwsh ./Install-SceneStudio.ps1`. The wizard's support-report ZIP (sanitized)
+  is the failure channel back to maintainers.
+- **Release/distribution**: `python scripts/build_release.py --refresh --zip`
+  runs the allowlist copy + portability + secret + import gates and writes
+  `MANIFEST.sha256`. Never hand-edit a release tree.
+
+Generic product code must never hardcode any house's topology — that belongs
+only in the gitignored local operator profile.

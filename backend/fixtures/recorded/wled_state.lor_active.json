@@ -1,0 +1,33 @@
+{
+  "_recorded": "WLED aabbccddeeff (wled.local) /json/state shape with a realtime owner present: root lor=1 (live override until stream ends), mainseg=0. lor=0 with the same shape is the surrendered state. Recorded 2026-09-24 for the external light-sync contention pass; the observed live device also had seg[0].frz=true with no owning Scene Studio session — the stale-freeze case reconcile_wled_freezes clears.",
+  "on": true,
+  "bri": 128,
+  "transition": 10,
+  "ps": -1,
+  "pl": -1,
+  "lor": 1,
+  "mainseg": 0,
+  "seg": [
+    {
+      "id": 0,
+      "start": 0,
+      "stop": 30,
+      "len": 30,
+      "grp": 0,
+      "spc": 0,
+      "of": 0,
+      "on": true,
+      "frz": true,
+      "bri": 255,
+      "cct": 0,
+      "col": [[255, 0, 0, 0], [0, 255, 0, 0], [0, 0, 255, 0]],
+      "fx": 0,
+      "sx": 128,
+      "ix": 128,
+      "pal": 0,
+      "sel": true,
+      "rev": false,
+      "mi": false
+    }
+  ]
+}

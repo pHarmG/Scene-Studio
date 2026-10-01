@@ -1,0 +1,27 @@
+{
+  "_recorded": "hyperHDR v21.0.0.0 at hyperhdr.local:8090, POST /json-rpc {\"command\":\"serverinfo\"} — instance 0 (current) actively receiving the webOS TV flatbuffer feed (priority 150, active+visible). Recorded 2026-09-24 for the external light-sync contention pass.",
+  "info": {
+    "activeEffects": [],
+    "activeLedColor": [[11, 45, 114]],
+    "components": [
+      {"enabled": true, "name": "ALL"},
+      {"enabled": true, "name": "SMOOTHING"},
+      {"enabled": true, "name": "BLACKBORDER"},
+      {"enabled": false, "name": "FORWARDER"},
+      {"enabled": true, "name": "VIDEOGRABBER"},
+      {"enabled": false, "name": "SYSTEMGRABBER"},
+      {"enabled": true, "name": "LEDDEVICE"}
+    ],
+    "currentInstance": 0,
+    "instance": [
+      {"friendly_name": "Workstation WLED Instance", "instance": 0, "running": true},
+      {"friendly_name": "Workstation HUE Instance", "instance": 1, "running": true}
+    ],
+    "priorities": [
+      {"active": true, "componentId": "FLATBUFSERVER", "origin": "webos@::ffff:127.0.0.1", "priority": 150, "visible": true},
+      {"active": false, "componentId": "VIDEOGRABBER", "origin": "System", "priority": 240, "visible": false}
+    ],
+    "priorities_autoselect": true,
+    "videomodehdr": "SDR"
+  }
+}

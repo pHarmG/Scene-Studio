@@ -1,0 +1,16 @@
+{
+  "arch": "esp32",
+  "ver": "14.4",
+  "vid": 2402040,
+  "name": "Studio WLED",
+  "mac": "AA:BB:CC:DD:EE:FF",
+  "bssid": "aa:bb:cc:dd:ee:f0",
+  "fps": 83,
+  "leds": {
+    "count": 30,
+    "rgbw": false,
+    "wv": false,
+    "power": 0,
+    "maxpwr": 850
+  }
+}

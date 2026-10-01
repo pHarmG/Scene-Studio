@@ -1,0 +1,30 @@
+# Local operator profile: machine-specific topology for THIS development
+# machine. Intentionally gitignored; see AGENTS.md and
+# .scene-studio.local.example.json.
+.scene-studio.local.json
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+*.egg-info/
+
+# Node
+node_modules/
+
+# Build outputs (rebuilt by npm run build / build_release.py)
+workbench/dist/
+home-assistant/scene-studio-card/dist/
+dist/
+
+# Review artifacts (keep .gitkeep only)
+home-assistant/scene-studio-card/review-artifacts/**
+!home-assistant/scene-studio-card/review-artifacts/.gitkeep
+
+# Installer working evidence (never commit)
+.tmp_scene_studio/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

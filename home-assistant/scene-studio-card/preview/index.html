@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scene Studio Card Preview</title>
+</head>
+<body>
+  <script type="module">
+    import "../dist/scene-studio-card.js";
+    import { setupHaPreviewPage, configureDeviceShell } from "../preview-shared/ha-preview-shell.mjs";
+    import { SCENARIOS, createMockHass, PROJECTION_ENTITY } from "./mock-projection.mjs";
+
+    const { toolbar, shell, caption } = setupHaPreviewPage(document, {
+      title: "Scene Studio Compact Control",
+      subtitle: "Preview the HA-native card against the sensor.scene_studio_ui projection contract (no legacy saved-scenes helpers).",
+      theme: "dark",
+    });
+
+    let activeScenario = SCENARIOS[0];
+
+    function seedSelection(scenario) {
+      const key = `scene-studio-ui:selected-scene:${PROJECTION_ENTITY}`;
+      try {
+        if (scenario.selected) window.localStorage.setItem(key, scenario.selected);
+        else window.localStorage.removeItem(key);
+      } catch {
+        // ignore
+      }
+    }
+
+    async function render() {
+      shell.innerHTML = "";
+      configureDeviceShell(shell, { width: activeScenario.widthPx, theme: "dark" });
+      seedSelection(activeScenario);
+
+      const card = document.createElement("scene-studio-card");
+      card.setConfig({
+        type: "custom:scene-studio-card",
+        collapsed_by_default: Boolean(activeScenario.collapsed),
+        preview_panel_open: activeScenario.panelOpen && activeScenario.panelKind !== "sessions",
+        ...(activeScenario.cardConfig ?? {}),
+      });
+      card.hass = createMockHass(activeScenario, { onRender: () => (card.hass = { ...card.hass }) });
+      shell.appendChild(card);
+      await card.updateComplete;
+      if (activeScenario.panelKind === "sessions") {
+        card._sessionsPanelOpen = true;
+      }
+      if (activeScenario.autoFire) {
+        await card.updateComplete;
+        const btn = card.shadowRoot?.querySelector(".controlRow .actionButton");
+        if (btn) btn.click();
+        await new Promise((r) => setTimeout(r, 30));
+      }
+      caption.textContent = `${activeScenario.label} · ${activeScenario.widthPx}px`;
+
+      for (const button of toolbar.querySelectorAll("button")) {
+        button.classList.toggle("active", button.dataset.id === activeScenario.id);
+      }
+    }
+
+    for (const scenario of SCENARIOS) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.id = scenario.id;
+      button.textContent = scenario.label;
+      button.addEventListener("click", () => {
+        activeScenario = scenario;
+        render();
+      });
+      toolbar.appendChild(button);
+    }
+
+    render();
+  </script>
+</body>
+</html>

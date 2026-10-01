@@ -1,0 +1,398 @@
+{
+  "registry_updated": "2026-09-11T23:00:00Z",
+  "render_plan": {
+    "fixture_plans": [
+      {
+        "fidelity": "native",
+        "fixture_id": "g_strip",
+        "operations": [
+          {
+            "description": "Apply static scene state via Hue CLIP v2",
+            "op": "hue.put_light",
+            "payload": {
+              "dimming": {
+                "brightness": 55.0
+              },
+              "dynamics": {
+                "duration": 400
+              },
+              "gradient": {
+                "mode": "interpolated_palette",
+                "points": [
+                  {
+                    "color": {
+                      "xy": {
+                        "x": 0.1732,
+                        "y": 0.0686
+                      }
+                    }
+                  },
+                  {
+                    "color": {
+                      "xy": {
+                        "x": 0.2149,
+                        "y": 0.0722
+                      }
+                    }
+                  },
+                  {
+                    "color": {
+                      "xy": {
+                        "x": 0.3141,
+                        "y": 0.101
+                      }
+                    }
+                  },
+                  {
+                    "color": {
+                      "xy": {
+                        "x": 0.5996,
+                        "y": 0.3875
+                      }
+                    }
+                  }
+                ]
+              },
+              "on": {
+                "on": true
+              }
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000001"
+          }
+        ],
+        "provider": "hue_v2"
+      },
+      {
+        "fidelity": "equivalent",
+        "fixture_id": "lamp",
+        "operations": [
+          {
+            "description": "Apply static scene state via Hue CLIP v2",
+            "op": "hue.put_light",
+            "payload": {
+              "color": {
+                "xy": {
+                  "x": 0.5996,
+                  "y": 0.3875
+                }
+              },
+              "dimming": {
+                "brightness": 40.0
+              },
+              "on": {
+                "on": true
+              }
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000008"
+          }
+        ],
+        "provider": "hue_v2"
+      },
+      {
+        "fidelity": "equivalent",
+        "fixture_id": "lower_bar",
+        "operations": [
+          {
+            "description": "Apply static scene state via Hue CLIP v2",
+            "op": "hue.put_light",
+            "payload": {
+              "color": {
+                "xy": {
+                  "x": 0.3141,
+                  "y": 0.101
+                }
+              },
+              "dimming": {
+                "brightness": 60.0
+              },
+              "on": {
+                "on": true
+              }
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000010"
+          }
+        ],
+        "provider": "hue_v2"
+      },
+      {
+        "fidelity": "equivalent",
+        "fixture_id": "middle_bar",
+        "operations": [
+          {
+            "description": "Apply static scene state via Hue CLIP v2",
+            "op": "hue.put_light",
+            "payload": {
+              "color": {
+                "xy": {
+                  "x": 0.2149,
+                  "y": 0.0722
+                }
+              },
+              "dimming": {
+                "brightness": 50.0
+              },
+              "on": {
+                "on": true
+              }
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000007"
+          }
+        ],
+        "provider": "hue_v2"
+      },
+      {
+        "fidelity": "equivalent",
+        "fixture_id": "office_strip",
+        "operations": [
+          {
+            "description": "Apply static scene state via Hue CLIP v2",
+            "op": "hue.put_light",
+            "payload": {
+              "color": {
+                "xy": {
+                  "x": 0.2149,
+                  "y": 0.0722
+                }
+              },
+              "dimming": {
+                "brightness": 45.0
+              },
+              "on": {
+                "on": true
+              }
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000018"
+          }
+        ],
+        "provider": "hue_v2"
+      },
+      {
+        "fidelity": "equivalent",
+        "fixture_id": "upper_bar",
+        "operations": [
+          {
+            "description": "Apply static scene state via Hue CLIP v2",
+            "op": "hue.put_light",
+            "payload": {
+              "color": {
+                "xy": {
+                  "x": 0.1732,
+                  "y": 0.0686
+                }
+              },
+              "dimming": {
+                "brightness": 60.0
+              },
+              "on": {
+                "on": true
+              }
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000015"
+          }
+        ],
+        "provider": "hue_v2"
+      },
+      {
+        "fidelity": "native",
+        "fixture_id": "wled_seg_0",
+        "operations": [
+          {
+            "description": "WLED state for fixture wled_seg_0 on device aabbccddeeff",
+            "op": "wled.post_state",
+            "payload": {
+              "seg": [
+                {
+                  "bri": 128,
+                  "col": [
+                    [
+                      26,
+                      35,
+                      126
+                    ]
+                  ],
+                  "frz": false,
+                  "id": 0,
+                  "on": true
+                }
+              ]
+            },
+            "provider": "wled",
+            "resource_ref": "aabbccddeeff:seg:0"
+          }
+        ],
+        "provider": "wled"
+      },
+      {
+        "fidelity": "native",
+        "fixture_id": "wled_seg_1",
+        "operations": [
+          {
+            "description": "WLED state for fixture wled_seg_1 on device aabbccddeeff",
+            "op": "wled.post_state",
+            "payload": {
+              "seg": [
+                {
+                  "bri": 128,
+                  "col": [
+                    [
+                      69,
+                      39,
+                      160
+                    ]
+                  ],
+                  "frz": false,
+                  "id": 1,
+                  "on": true
+                }
+              ]
+            },
+            "provider": "wled",
+            "resource_ref": "aabbccddeeff:seg:1"
+          }
+        ],
+        "provider": "wled"
+      },
+      {
+        "fidelity": "native",
+        "fixture_id": "wled_seg_2",
+        "operations": [
+          {
+            "description": "WLED state for fixture wled_seg_2 on device aabbccddeeff",
+            "op": "wled.post_state",
+            "payload": {
+              "seg": [
+                {
+                  "bri": 128,
+                  "col": [
+                    [
+                      123,
+                      31,
+                      162
+                    ]
+                  ],
+                  "frz": false,
+                  "id": 2,
+                  "on": true
+                }
+              ]
+            },
+            "provider": "wled",
+            "resource_ref": "aabbccddeeff:seg:2"
+          }
+        ],
+        "provider": "wled"
+      },
+      {
+        "fidelity": "native",
+        "fixture_id": "wled_seg_3",
+        "operations": [
+          {
+            "description": "WLED state for fixture wled_seg_3 on device aabbccddeeff",
+            "op": "wled.post_state",
+            "payload": {
+              "seg": [
+                {
+                  "bri": 128,
+                  "col": [
+                    [
+                      255,
+                      143,
+                      0
+                    ]
+                  ],
+                  "frz": false,
+                  "id": 3,
+                  "on": true
+                }
+              ]
+            },
+            "provider": "wled",
+            "resource_ref": "aabbccddeeff:seg:3"
+          }
+        ],
+        "provider": "wled"
+      },
+      {
+        "fidelity": "native",
+        "fixture_id": "wled_seg_4",
+        "operations": [
+          {
+            "description": "WLED state for fixture wled_seg_4 on device aabbccddeeff",
+            "op": "wled.post_state",
+            "payload": {
+              "seg": [
+                {
+                  "bri": 128,
+                  "col": [
+                    [
+                      123,
+                      31,
+                      162
+                    ]
+                  ],
+                  "frz": false,
+                  "id": 4,
+                  "on": true
+                }
+              ]
+            },
+            "provider": "wled",
+            "resource_ref": "aabbccddeeff:seg:4"
+          }
+        ],
+        "provider": "wled"
+      },
+      {
+        "fidelity": "native",
+        "fixture_id": "wled_seg_5",
+        "operations": [
+          {
+            "description": "WLED state for fixture wled_seg_5 on device aabbccddeeff",
+            "op": "wled.post_state",
+            "payload": {
+              "seg": [
+                {
+                  "bri": 128,
+                  "col": [
+                    [
+                      69,
+                      39,
+                      160
+                    ]
+                  ],
+                  "frz": false,
+                  "id": 5,
+                  "on": true
+                }
+              ]
+            },
+            "provider": "wled",
+            "resource_ref": "aabbccddeeff:seg:5"
+          }
+        ],
+        "provider": "wled"
+      }
+    ],
+    "notes": [
+      "skipped fixture 'custom_gradient': no fixture_states entry and scene has no default_state",
+      "skipped fixture 'double_strip': disabled"
+    ],
+    "scene_id": "twilight",
+    "skipped_fixture_ids": [
+      "double_strip"
+    ],
+    "target_ids": [
+      "office"
+    ]
+  },
+  "scene_id": "twilight",
+  "target_ids": [
+    "office"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1440, "h": 900, "title": "Overview" },
+    { "file": "Scenes.dc.html", "x": 1540, "y": 0, "w": 1440, "h": 820, "title": "Scenes" },
+    { "file": "Fixtures.dc.html", "x": 3080, "y": 0, "w": 1440, "h": 1040, "title": "Fixtures" },
+    { "file": "Discovery.dc.html", "x": 0, "y": 1180, "w": 1440, "h": 1040, "title": "Discovery" },
+    { "file": "System.dc.html", "x": 1540, "y": 1180, "w": 1440, "h": 900, "title": "System drawer" },
+    { "file": "Mobile.dc.html", "x": 3080, "y": 1180, "w": 390, "h": 1500, "title": "Mobile" }
+  ],
+  "launch": { "view": "canvas" }
+}

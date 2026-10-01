@@ -1,0 +1,192 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    :root{
+      --bg:#101318; --surface:#181d24; --surface-2:#20262f;
+      --border:#2b333e; --border-soft:#232a34;
+      --text:#e7ebf1; --text-dim:#98a2b0; --text-faint:#6d7684;
+      --ok:#43b971; --ok-dim:rgba(67,185,113,.16);
+      --warn:#e0a83a; --warn-dim:rgba(224,168,58,.16);
+      --err:#e05d5d; --err-dim:rgba(224,93,93,.16);
+      --idle:#8a93a0; --idle-dim:rgba(138,147,160,.14);
+      --accent:#5b8def;
+      --radius-lg:14px; --radius:10px; --radius-sm:6px;
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;}
+    a{color:var(--accent);} a:hover{color:#82abf5;}
+    .shell{min-height:1040px;background:var(--bg);color:var(--text);font-family:"Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;}
+    .top{display:flex;align-items:center;gap:14px;padding:18px 40px;border-bottom:1px solid var(--border-soft);}
+    .wordmark{font-size:15px;font-weight:600;margin:0;}
+    .tag{font-size:11px;color:var(--text-faint);border:1px solid var(--border);border-radius:4px;padding:2px 7px;}
+    .spacer{flex:1;}
+    .status-pill{display:flex;align-items:center;gap:7px;border-radius:999px;padding:7px 14px;font-size:12px;font-weight:600;border:none;background:var(--err-dim);color:var(--err);}
+    .status-dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+    .icon-btn{position:relative;width:34px;height:34px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);color:var(--text-dim);display:flex;align-items:center;justify-content:center;}
+    .badge{position:absolute;top:-5px;right:-5px;background:var(--warn);color:#241a02;font-size:10px;font-weight:700;border-radius:999px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 3px;}
+    .conn-dot{position:absolute;bottom:2px;right:2px;width:7px;height:7px;border-radius:50%;background:var(--err);border:2px solid var(--surface);}
+    .tabs{display:flex;gap:4px;padding:0 40px;border-bottom:1px solid var(--border-soft);}
+    .tabs button{padding:13px 14px;font-size:13px;color:var(--text-dim);background:none;border:none;border-bottom:2px solid transparent;font-family:inherit;}
+    .tabs button.active{color:var(--text);border-bottom-color:var(--accent);font-weight:600;}
+    .content{padding:24px 40px 48px;max-width:1360px;}
+    .list-meta{font-size:12px;color:var(--text-faint);margin-bottom:18px;}
+    .group{margin-bottom:10px;}
+    .group-head{display:flex;align-items:center;gap:8px;padding:8px 4px;font-size:12px;font-weight:700;color:var(--text-dim);letter-spacing:.02em;}
+    .group-count{color:var(--text-faint);font-weight:500;}
+    .group-body{display:flex;flex-direction:column;gap:1px;border:1px solid var(--border-soft);border-radius:var(--radius);overflow:hidden;}
+    .frow{display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--surface);font-size:13px;}
+    .frow.collapsed-summary{background:var(--surface-2);color:var(--text-dim);}
+    .fdot{width:7px;height:7px;border-radius:50%;flex:none;}
+    .fname{width:220px;flex:none;font-weight:500;}
+    .fprovider{width:70px;flex:none;font-size:11px;color:var(--text-faint);border:1px solid var(--border);border-radius:4px;padding:2px 6px;text-align:center;}
+    .fcaps{display:flex;gap:8px;color:var(--text-faint);width:110px;flex:none;}
+    .fcaps svg{opacity:.6;}
+    .fhealth{flex:1;font-size:12px;color:var(--text-dim);text-align:right;}
+    .fhealth.err{color:var(--err);} .fhealth.warn{color:var(--warn);} .fhealth.idle{color:var(--text-faint);}
+    .chev{color:var(--text-faint);flex:none;}
+  </style>
+</helmet>
+<div class="shell">
+  <header class="top">
+    <h1 class="wordmark">Scene Studio Workbench</h1>
+    <span class="tag">mock</span>
+    <div class="spacer"></div>
+    <button class="status-pill"><span class="status-dot"></span>7 issues</button>
+    <button class="icon-btn" title="Discovery inbox">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v11l-3 5H7l-3-5z"/><path d="M4 15h4l2 3h4l2-3h4"/></svg>
+      <span class="badge">8</span>
+    </button>
+    <button class="icon-btn" title="System">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.6 1z"/></svg>
+      <span class="conn-dot"></span>
+    </button>
+  </header>
+  <nav class="tabs">
+    <button>Overview</button>
+    <button>Scenes</button>
+    <button class="active">Fixtures</button>
+  </nav>
+  <div class="content">
+    <div class="list-meta">25 fixtures · grouped by room · capability glyphs on hover/selection</div>
+
+    <div class="group">
+      <div class="group-head">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        Studio <span class="group-count">· 13 fixtures</span>
+      </div>
+      <div class="group-body">
+        <div class="frow"><span class="fdot" style="background:var(--ok);"></span><span class="fname">Hue G Strip</span><span class="fprovider">Hue</span>
+          <span class="fcaps">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7l5.7 6.7a7 7 0 1 1-11.4 0z"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/></svg>
+          </span>
+          <span class="fhealth">ready</span>
+        </div>
+        <div class="frow"><span class="fdot" style="background:var(--ok);"></span><span class="fname">Middle Bar</span><span class="fprovider">Hue</span>
+          <span class="fcaps">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7l5.7 6.7a7 7 0 1 1-11.4 0z"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+          </span>
+          <span class="fhealth">ready</span>
+        </div>
+        <div class="frow"><span class="fdot" style="background:var(--ok);"></span><span class="fname">Lamp</span><span class="fprovider">Hue</span>
+          <span class="fcaps">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7l5.7 6.7a7 7 0 1 1-11.4 0z"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+          </span>
+          <span class="fhealth">ready</span>
+        </div>
+        <div class="frow"><span class="fdot" style="background:var(--ok);"></span><span class="fname">Lower Bar</span><span class="fprovider">Hue</span>
+          <span class="fcaps">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7l5.7 6.7a7 7 0 1 1-11.4 0z"/></svg>
+          </span>
+          <span class="fhealth">ready</span>
+        </div>
+        <div class="frow"><span class="fdot" style="background:var(--ok);"></span><span class="fname">Upper Bar</span><span class="fprovider">Hue</span>
+          <span class="fcaps">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7l5.7 6.7a7 7 0 1 1-11.4 0z"/></svg>
+          </span>
+          <span class="fhealth">ready</span>
+        </div>
+        <div class="frow"><span class="fdot" style="background:var(--err);"></span><span class="fname">Double Strip</span><span class="fprovider">Hue</span>
+          <span class="fcaps"></span>
+          <span class="fhealth err">missing — candidate available, review in Discovery</span>
+        </div>
+        <div class="frow"><span class="fdot" style="background:var(--warn);"></span><span class="fname">Custom Gradient</span><span class="fprovider">Hue</span>
+          <span class="fcaps">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7l5.7 6.7a7 7 0 1 1-11.4 0z"/></svg>
+          </span>
+          <span class="fhealth warn">degraded — no gradient capability reported</span>
+        </div>
+        <div class="frow collapsed-summary">
+          <span class="fdot" style="background:var(--err);"></span><span class="fname">WLED Segment 0–5</span><span class="fprovider">WLED</span>
+          <span class="fcaps">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 12 7 12 9 5 13 19 15 12 22 12"/></svg>
+          </span>
+          <span class="fhealth err">6 fixtures · provider offline, treated as missing</span>
+          <span class="chev"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        Office <span class="group-count">· 2 fixtures</span>
+      </div>
+      <div class="group-body">
+        <div class="frow"><span class="fdot" style="background:var(--ok);"></span><span class="fname">Office Strip</span><span class="fprovider">Hue</span>
+          <span class="fcaps">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7l5.7 6.7a7 7 0 1 1-11.4 0z"/></svg>
+          </span>
+          <span class="fhealth">ready</span>
+        </div>
+        <div class="frow"><span class="fdot" style="background:var(--ok);"></span><span class="fname">Office Ceiling</span><span class="fprovider">HA</span>
+          <span class="fcaps">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7l5.7 6.7a7 7 0 1 1-11.4 0z"/></svg>
+          </span>
+          <span class="fhealth">ready</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        Bathroom <span class="group-count">· 4 fixtures</span>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        Bedroom <span class="group-count">· 3 fixtures</span>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        Living room <span class="group-count">· 1 fixture</span>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="group-head">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        Kitchen <span class="group-count">· 2 fixtures</span>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

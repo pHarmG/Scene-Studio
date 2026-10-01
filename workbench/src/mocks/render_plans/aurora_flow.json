@@ -1,0 +1,515 @@
+{
+  "registry_updated": "2026-09-11T23:00:00Z",
+  "render_plan": {
+    "fixture_plans": [
+      {
+        "fidelity": "approximate",
+        "fixture_id": "custom_gradient",
+        "operations": [
+          {
+            "description": "Apply static scene state via Hue CLIP v2",
+            "op": "hue.put_light",
+            "payload": {
+              "color": {
+                "xy": {
+                  "x": 0.1419,
+                  "y": 0.3085
+                }
+              },
+              "dimming": {
+                "brightness": 60.0
+              },
+              "on": {
+                "on": true
+              }
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000017"
+          }
+        ],
+        "provider": "hue_v2",
+        "reason": "motion 'palette_cycle' cannot run natively on fixture 'custom_gradient'; palette_cycle rendered as a static snapshot of the first palette color"
+      },
+      {
+        "fidelity": "native",
+        "fixture_id": "g_strip",
+        "operations": [
+          {
+            "description": "Apply static scene state via Hue CLIP v2",
+            "op": "hue.put_light",
+            "payload": {
+              "gradient": {
+                "mode": "interpolated_palette",
+                "points": [
+                  {
+                    "color": {
+                      "xy": {
+                        "x": 0.1419,
+                        "y": 0.3085
+                      }
+                    }
+                  },
+                  {
+                    "color": {
+                      "xy": {
+                        "x": 0.1598,
+                        "y": 0.1174
+                      }
+                    }
+                  },
+                  {
+                    "color": {
+                      "xy": {
+                        "x": 0.2238,
+                        "y": 0.0833
+                      }
+                    }
+                  }
+                ]
+              },
+              "on": {
+                "on": true
+              }
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000001"
+          },
+          {
+            "description": "Managed dynamic scene execution (scene palette + speed; recall dynamic_palette)",
+            "op": "hue.put_scene_dynamic",
+            "payload": {
+              "palette": [
+                "#00e5ff",
+                "#2979ff",
+                "#7c4dff",
+                "#00c853"
+              ],
+              "speed": 0.4
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000001"
+          }
+        ],
+        "provider": "hue_v2",
+        "reason": "fixture 'g_strip' executes motion 'palette_cycle' through the managed dynamic scene mechanism (hue.put_scene_dynamic); Hue lights do not accept direct dynamics.status writes"
+      },
+      {
+        "fidelity": "native",
+        "fixture_id": "lamp",
+        "operations": [
+          {
+            "description": "Apply static scene state via Hue CLIP v2",
+            "op": "hue.put_light",
+            "payload": {
+              "color": {
+                "xy": {
+                  "x": 0.1598,
+                  "y": 0.1174
+                }
+              },
+              "dimming": {
+                "brightness": 60.0
+              },
+              "on": {
+                "on": true
+              }
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000008"
+          },
+          {
+            "description": "Managed dynamic scene execution (scene palette + speed; recall dynamic_palette)",
+            "op": "hue.put_scene_dynamic",
+            "payload": {
+              "palette": [
+                "#00e5ff",
+                "#2979ff",
+                "#7c4dff",
+                "#00c853"
+              ],
+              "speed": 0.4
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000008"
+          }
+        ],
+        "provider": "hue_v2",
+        "reason": "fixture 'lamp' executes motion 'palette_cycle' through the managed dynamic scene mechanism (hue.put_scene_dynamic); Hue lights do not accept direct dynamics.status writes"
+      },
+      {
+        "fidelity": "native",
+        "fixture_id": "lower_bar",
+        "operations": [
+          {
+            "description": "Apply static scene state via Hue CLIP v2",
+            "op": "hue.put_light",
+            "payload": {
+              "color": {
+                "xy": {
+                  "x": 0.2238,
+                  "y": 0.0833
+                }
+              },
+              "dimming": {
+                "brightness": 60.0
+              },
+              "on": {
+                "on": true
+              }
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000010"
+          },
+          {
+            "description": "Managed dynamic scene execution (scene palette + speed; recall dynamic_palette)",
+            "op": "hue.put_scene_dynamic",
+            "payload": {
+              "palette": [
+                "#00e5ff",
+                "#2979ff",
+                "#7c4dff",
+                "#00c853"
+              ],
+              "speed": 0.4
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000010"
+          }
+        ],
+        "provider": "hue_v2",
+        "reason": "fixture 'lower_bar' executes motion 'palette_cycle' through the managed dynamic scene mechanism (hue.put_scene_dynamic); Hue lights do not accept direct dynamics.status writes"
+      },
+      {
+        "fidelity": "native",
+        "fixture_id": "middle_bar",
+        "operations": [
+          {
+            "description": "Apply static scene state via Hue CLIP v2",
+            "op": "hue.put_light",
+            "payload": {
+              "color": {
+                "xy": {
+                  "x": 0.1419,
+                  "y": 0.3085
+                }
+              },
+              "dimming": {
+                "brightness": 60.0
+              },
+              "on": {
+                "on": true
+              }
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000007"
+          },
+          {
+            "description": "Managed dynamic scene execution (scene palette + speed; recall dynamic_palette)",
+            "op": "hue.put_scene_dynamic",
+            "payload": {
+              "palette": [
+                "#00e5ff",
+                "#2979ff",
+                "#7c4dff",
+                "#00c853"
+              ],
+              "speed": 0.4
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000007"
+          }
+        ],
+        "provider": "hue_v2",
+        "reason": "fixture 'middle_bar' executes motion 'palette_cycle' through the managed dynamic scene mechanism (hue.put_scene_dynamic); Hue lights do not accept direct dynamics.status writes"
+      },
+      {
+        "fidelity": "native",
+        "fixture_id": "office_strip",
+        "operations": [
+          {
+            "description": "Apply static scene state via Hue CLIP v2",
+            "op": "hue.put_light",
+            "payload": {
+              "color": {
+                "xy": {
+                  "x": 0.1598,
+                  "y": 0.1174
+                }
+              },
+              "dimming": {
+                "brightness": 60.0
+              },
+              "on": {
+                "on": true
+              }
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000018"
+          },
+          {
+            "description": "Managed dynamic scene execution (scene palette + speed; recall dynamic_palette)",
+            "op": "hue.put_scene_dynamic",
+            "payload": {
+              "palette": [
+                "#00e5ff",
+                "#2979ff",
+                "#7c4dff",
+                "#00c853"
+              ],
+              "speed": 0.4
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000018"
+          }
+        ],
+        "provider": "hue_v2",
+        "reason": "fixture 'office_strip' executes motion 'palette_cycle' through the managed dynamic scene mechanism (hue.put_scene_dynamic); Hue lights do not accept direct dynamics.status writes"
+      },
+      {
+        "fidelity": "native",
+        "fixture_id": "upper_bar",
+        "operations": [
+          {
+            "description": "Apply static scene state via Hue CLIP v2",
+            "op": "hue.put_light",
+            "payload": {
+              "color": {
+                "xy": {
+                  "x": 0.1223,
+                  "y": 0.6863
+                }
+              },
+              "dimming": {
+                "brightness": 60.0
+              },
+              "on": {
+                "on": true
+              }
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000015"
+          },
+          {
+            "description": "Managed dynamic scene execution (scene palette + speed; recall dynamic_palette)",
+            "op": "hue.put_scene_dynamic",
+            "payload": {
+              "palette": [
+                "#00e5ff",
+                "#2979ff",
+                "#7c4dff",
+                "#00c853"
+              ],
+              "speed": 0.4
+            },
+            "provider": "hue_v2",
+            "resource_ref": "00000000-0000-4000-8000-000000000015"
+          }
+        ],
+        "provider": "hue_v2",
+        "reason": "fixture 'upper_bar' executes motion 'palette_cycle' through the managed dynamic scene mechanism (hue.put_scene_dynamic); Hue lights do not accept direct dynamics.status writes"
+      },
+      {
+        "fidelity": "native",
+        "fixture_id": "wled_seg_0",
+        "operations": [
+          {
+            "description": "WLED state for fixture wled_seg_0 on device aabbccddeeff",
+            "op": "wled.post_state",
+            "payload": {
+              "seg": [
+                {
+                  "col": [
+                    [
+                      124,
+                      77,
+                      255
+                    ]
+                  ],
+                  "frz": false,
+                  "fx": 10,
+                  "id": 0,
+                  "on": true,
+                  "sx": 102,
+                  "sx_hint": "speed"
+                }
+              ]
+            },
+            "provider": "wled",
+            "resource_ref": "aabbccddeeff:seg:0"
+          }
+        ],
+        "provider": "wled",
+        "reason": "native WLED effect via explicit fx 10"
+      },
+      {
+        "fidelity": "approximate",
+        "fixture_id": "wled_seg_1",
+        "operations": [
+          {
+            "description": "WLED state for fixture wled_seg_1 on device aabbccddeeff",
+            "op": "wled.post_state",
+            "payload": {
+              "seg": [
+                {
+                  "bri": 153,
+                  "col": [
+                    [
+                      0,
+                      200,
+                      83
+                    ]
+                  ],
+                  "frz": false,
+                  "id": 1,
+                  "on": true
+                }
+              ]
+            },
+            "provider": "wled",
+            "resource_ref": "aabbccddeeff:seg:1"
+          }
+        ],
+        "provider": "wled",
+        "reason": "palette_cycle cannot run natively without a resolvable fx index; rendered as static colors"
+      },
+      {
+        "fidelity": "approximate",
+        "fixture_id": "wled_seg_2",
+        "operations": [
+          {
+            "description": "WLED state for fixture wled_seg_2 on device aabbccddeeff",
+            "op": "wled.post_state",
+            "payload": {
+              "seg": [
+                {
+                  "bri": 153,
+                  "col": [
+                    [
+                      0,
+                      229,
+                      255
+                    ]
+                  ],
+                  "frz": false,
+                  "id": 2,
+                  "on": true
+                }
+              ]
+            },
+            "provider": "wled",
+            "resource_ref": "aabbccddeeff:seg:2"
+          }
+        ],
+        "provider": "wled",
+        "reason": "palette_cycle cannot run natively without a resolvable fx index; rendered as static colors"
+      },
+      {
+        "fidelity": "approximate",
+        "fixture_id": "wled_seg_3",
+        "operations": [
+          {
+            "description": "WLED state for fixture wled_seg_3 on device aabbccddeeff",
+            "op": "wled.post_state",
+            "payload": {
+              "seg": [
+                {
+                  "bri": 153,
+                  "col": [
+                    [
+                      41,
+                      121,
+                      255
+                    ]
+                  ],
+                  "frz": false,
+                  "id": 3,
+                  "on": true
+                }
+              ]
+            },
+            "provider": "wled",
+            "resource_ref": "aabbccddeeff:seg:3"
+          }
+        ],
+        "provider": "wled",
+        "reason": "palette_cycle cannot run natively without a resolvable fx index; rendered as static colors"
+      },
+      {
+        "fidelity": "approximate",
+        "fixture_id": "wled_seg_4",
+        "operations": [
+          {
+            "description": "WLED state for fixture wled_seg_4 on device aabbccddeeff",
+            "op": "wled.post_state",
+            "payload": {
+              "seg": [
+                {
+                  "bri": 153,
+                  "col": [
+                    [
+                      124,
+                      77,
+                      255
+                    ]
+                  ],
+                  "frz": false,
+                  "id": 4,
+                  "on": true
+                }
+              ]
+            },
+            "provider": "wled",
+            "resource_ref": "aabbccddeeff:seg:4"
+          }
+        ],
+        "provider": "wled",
+        "reason": "palette_cycle cannot run natively without a resolvable fx index; rendered as static colors"
+      },
+      {
+        "fidelity": "approximate",
+        "fixture_id": "wled_seg_5",
+        "operations": [
+          {
+            "description": "WLED state for fixture wled_seg_5 on device aabbccddeeff",
+            "op": "wled.post_state",
+            "payload": {
+              "seg": [
+                {
+                  "bri": 153,
+                  "col": [
+                    [
+                      0,
+                      200,
+                      83
+                    ]
+                  ],
+                  "frz": false,
+                  "id": 5,
+                  "on": true
+                }
+              ]
+            },
+            "provider": "wled",
+            "resource_ref": "aabbccddeeff:seg:5"
+          }
+        ],
+        "provider": "wled",
+        "reason": "palette_cycle cannot run natively without a resolvable fx index; rendered as static colors"
+      }
+    ],
+    "notes": [
+      "skipped fixture 'double_strip': disabled"
+    ],
+    "scene_id": "aurora_flow",
+    "skipped_fixture_ids": [
+      "double_strip"
+    ],
+    "target_ids": [
+      "office"
+    ]
+  },
+  "scene_id": "aurora_flow",
+  "target_ids": [
+    "office"
+  ]
+}

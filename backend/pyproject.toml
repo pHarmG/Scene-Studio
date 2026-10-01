@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scene-studio"
+version = "0.1.0"
+description = "Provider-neutral lighting scene domain core for Scene Studio"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+# Deliberately dependency-free: the domain core must import (and be testable)
+# without AppDaemon or any third-party package (master plan §2.1).
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0,<9.0.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

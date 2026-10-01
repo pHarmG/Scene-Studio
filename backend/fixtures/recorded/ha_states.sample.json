@@ -1,0 +1,19 @@
+{
+  "light.office_lights": {
+    "state": "on",
+    "brightness": 180,
+    "min_mireds": 153,
+    "max_mireds": 454,
+    "supported_color_modes": [
+      "color_temp"
+    ],
+    "friendly_name": "Office Ceiling"
+  },
+  "light.studio_tv_bias": {
+    "state": "off",
+    "supported_color_modes": [
+      "rgb"
+    ],
+    "friendly_name": "Studio TV Bias"
+  }
+}
