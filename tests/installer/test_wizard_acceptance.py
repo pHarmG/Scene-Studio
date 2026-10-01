@@ -158,6 +158,10 @@ def test_wizard_fresh_install_three_independent_endpoints(release_dir, tmp_path)
     # the Workbench URL is built from the AppDaemon HTTP endpoint
     assert "Open the Workbench:  http://appdaemon.example.test" in output
     assert f"http://127.0.0.1:{api.port}/local/" not in output
+    # docs pointers print even in unattended mode (banner)
+    assert "home-assistant.io/docs/authentication" in output
+    assert "github.com/hassio-addons/app-ssh" in output
+    assert "github.com/hassio-addons/addon-appdaemon" in output
 
     fs = state_dir / "fs"
     backend_adapter = fs / ADDON_ROOT.strip("/") / "apps" / "scene_studio" / "appdaemon_adapter" / "adapter.py"
@@ -422,6 +426,8 @@ def test_wizard_provider_profile_and_secret_handling(release_dir, tmp_path):
     assert 'scene_studio_hue_app_key: "' + FAKE_HUE_KEY + '"' in secrets_yaml
     assert FAKE_HUE_KEY not in output
     assert FAKE_HUE_KEY not in apps_yaml
+    # Hue help pointer printed when the provider is enabled
+    assert "developers.meethue.com" in output
     for path in fs.rglob("*"):
         if path.is_file():
             assert FAKE_HA_TOKEN not in path.read_text(encoding="utf-8", errors="replace"), path

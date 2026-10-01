@@ -501,6 +501,11 @@ Write-Host "Scene Studio $Version - lighting scenes for Home Assistant."
 Write-Host 'This wizard installs Scene Studio onto your Home Assistant + AppDaemon'
 Write-Host 'system. Your computer only needs PowerShell 7, Python, and ssh -'
 Write-Host 'everything else runs on the target.'
+Write-Host ''
+Write-Host 'Where the answers come from (official docs):'
+Write-Host '  HA address + access token:  https://www.home-assistant.io/docs/authentication/'
+Write-Host '  ssh add-on (key access):    https://github.com/hassio-addons/app-ssh'
+Write-Host '  AppDaemon add-on:           https://github.com/hassio-addons/addon-appdaemon'
 if (-not $Unattended) {
     Read-Host 'Press Enter to begin'
 }
@@ -548,6 +553,7 @@ try {
     # --- 2. Home Assistant connection ------------------------------------
     $script:Stage = 'ha-api'
     Write-Step '2/9 Home Assistant API connection'
+    Write-Detail 'The address is the same one you use to open Home Assistant in a browser.'
     $HaUrl = (Get-Answer -Key 'ha_url' -Prompt 'Home Assistant API address' -Default 'http://homeassistant.local:8123' -Required).TrimEnd('/')
     Write-Detail "Testing $HaUrl ..."
     try {
@@ -569,12 +575,15 @@ try {
     $HaToken = $env:SCENE_STUDIO_HA_TOKEN
     if (-not $HaToken -and -not $Unattended) {
         Write-Detail 'A long-lived access token lets the installer verify health and restart AppDaemon.'
-        Write-Detail 'Create one in Home Assistant: click your profile (bottom left) > Security > Long-lived access tokens.'
+        Write-Detail 'Create one in Home Assistant: click your profile (bottom left) > Security > Long-lived access tokens'
+        Write-Detail '(https://www.home-assistant.io/docs/authentication/).'
         $secure = Read-Host -Prompt 'Paste the token' -AsSecureString
         $HaToken = Get-PlainSecure $secure
     }
     if (-not $HaToken) {
-        throw 'A Home Assistant long-lived access token is required (SCENE_STUDIO_HA_TOKEN, or paste it when prompted). It is used only for this installation and is not saved to disk.'
+        throw ('A Home Assistant long-lived access token is required (SCENE_STUDIO_HA_TOKEN, or paste it when prompted). ' +
+            'It is used only for this installation and is not saved to disk. How to create one: ' +
+            'https://www.home-assistant.io/docs/authentication/')
     }
     try {
         $config = Invoke-RestMethod -Uri "$HaUrl/api/config" -Method Get -Headers @{ Authorization = "Bearer $HaToken" } -TimeoutSec 10
@@ -583,12 +592,15 @@ try {
         Write-Detail "authenticated; Home Assistant $($script:HaVersion)"
     } catch {
         Record-Probe 'ha_api_auth' "rejected: $($_.Exception.Message)"
-        throw "The token was rejected by $HaUrl/api/config : $($_.Exception.Message)"
+        throw "The token was rejected by $HaUrl/api/config : $($_.Exception.Message) Create a fresh token per https://www.home-assistant.io/docs/authentication/."
     }
 
     # --- 3. AppDaemon (ssh) connection ------------------------------------
     $script:Stage = 'ssh'
     Write-Step '3/9 AppDaemon host (ssh connection)'
+    Write-Detail 'The ssh target is the machine running the AppDaemon add-on (often the same box as Home Assistant).'
+    Write-Detail 'ssh add-on setup (key auth required; the wizard cannot type passwords):'
+    Write-Detail '  https://github.com/hassio-addons/app-ssh'
     $SshHostInput = Get-Answer -Key 'ssh_host' -Prompt 'AppDaemon ssh host (where AppDaemon runs)' -Default ([Uri]$HaUrl).Host -Required
     $answerPort = $script:AnswersData -and $script:AnswersData.PSObject.Properties.Name -contains 'ssh_port' -and $null -ne $script:AnswersData.ssh_port
     if ($answerPort) {
@@ -650,6 +662,8 @@ try {
             Write-WizardWarning "$AppDaemonHttp is not reachable from this computer right now (firewall?). Continuing; the Workbench URL will use it."
         } elseif (-not $Unattended) {
             Write-Detail 'The inferred address is not reachable. Home Assistant and AppDaemon do NOT have to share a host.'
+            Write-Detail 'AppDaemon serves HTTP on its dashboard port (default 5050):'
+            Write-Detail '  https://appdaemon.readthedocs.io/en/latest/ADDON.html'
             $manual = (Read-Host -Prompt 'Scene Studio / AppDaemon HTTP address (e.g. http://appdaemon-host:5050)').TrimEnd('/')
             if (-not $manual) {
                 throw 'A Scene Studio HTTP endpoint is required (the Workbench URL and health check come from it).'
@@ -716,6 +730,8 @@ try {
             if ($Unattended) {
                 throw 'Could not auto-detect the AppDaemon config directory; provide appdaemon_config_root in the answers file.'
             }
+            Write-Detail 'On Home Assistant OS the AppDaemon add-on config lives under /addon_configs/<add-on slug>'
+            Write-Detail '(https://github.com/hassio-addons/addon-appdaemon).'
             $AddonRoot = Read-Host -Prompt 'Enter the AppDaemon config directory (e.g. /addon_configs/a0d7b954_appdaemon)'
         }
     }
@@ -756,6 +772,8 @@ try {
     $HueHost = ''; $HueBridgeId = ''; $WledHost = ''; $HyperhdrHost = ''
     $HueAppKey = $env:SCENE_STUDIO_HUE_APP_KEY
     if ($UseHue) {
+        Write-Detail 'Hue docs: find the bridge address in the Hue app (Settings > My Hue bridge):'
+        Write-Detail '  https://developers.meethue.com/develop/get-started-2/'
         $HueHost = Get-Answer -Key 'providers.hue.host' -Prompt 'Hue bridge address' -Default '' -Required
         $hostPort = if ($HueHost -match '^([^:]+):(\d+)$') { @{ h = $Matches[1]; p = [int]$Matches[2] } } else { @{ h = $HueHost; p = 443 } }
         $hueOk = Test-TcpReachable -TargetHost $hostPort.h -Port $hostPort.p
@@ -805,6 +823,8 @@ try {
         }
     }
     if ($UseWled) {
+        Write-Detail 'WLED docs: the controller address is its web UI address, e.g. http://wled-1234.local'
+        Write-Detail '  https://kno.wled.ge/basics/web-ui/'
         $WledHost = Get-Answer -Key 'providers.wled.host' -Prompt 'WLED controller address' -Default '' -Required
         $hostPort = if ($WledHost -match '^([^:]+):(\d+)$') { @{ h = $Matches[1]; p = [int]$Matches[2] } } else { @{ h = $WledHost; p = 80 } }
         $wledOk = Test-TcpReachable -TargetHost $hostPort.h -Port $hostPort.p
@@ -815,6 +835,8 @@ try {
         Write-Detail "WLED reachable ($($hostPort.h):$($hostPort.p))"
     }
     if ($UseHyperhdr) {
+        Write-Detail 'hyperHDR docs (address is host:port, e.g. tv.local:8090):'
+        Write-Detail '  https://github.com/awawa-dev/HyperHDR'
         $HyperhdrHost = Get-Answer -Key 'providers.hyperhdr.host' -Prompt 'hyperHDR address (host:port)' -Default '' -Required
         $hostPort = if ($HyperhdrHost -match '^([^:]+):(\d+)$') { @{ h = $Matches[1]; p = [int]$Matches[2] } } else { throw 'hyperHDR address must be host:port' }
         $hdrOk = Test-TcpReachable -TargetHost $hostPort.h -Port $hostPort.p

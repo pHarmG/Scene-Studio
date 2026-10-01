@@ -21,6 +21,19 @@ system **from your normal computer** — nothing is installed on your PC.
    The wizard asks you to paste it; it is used for this installation only and
    is not saved to disk.
 
+## Where to find each answer (official docs)
+
+| The wizard asks for... | Where to get it |
+| --- | --- |
+| Home Assistant address | The same URL you use to open Home Assistant in a browser, e.g. `http://homeassistant.local:8123`. |
+| Long-lived access token | In Home Assistant: click your profile (bottom left) > Security > Long-lived access tokens > Create — <https://www.home-assistant.io/docs/authentication/> |
+| ssh access to the HA host | Install the **Advanced SSH & Web Terminal** add-on (or the official **Terminal & SSH**), add your public key — <https://github.com/hassio-addons/app-ssh> |
+| AppDaemon config directory | On Home Assistant OS the add-on config lives under `/addon_configs/<add-on slug>` — <https://github.com/hassio-addons/addon-appdaemon> |
+| Scene Studio / AppDaemon HTTP address | AppDaemon's dashboard port, normally `http://<appdaemon-host>:5050` (inferred by the wizard; asked only if it is not reachable) — <https://appdaemon.readthedocs.io/en/latest/ADDON.html> |
+| Hue bridge address | The Hue app: Settings > My Hue bridge — developer docs: <https://developers.meethue.com/develop/get-started-2/> |
+| WLED controller address | The WLED web UI address, e.g. `http://wled-1234.local` — <https://kno.wled.ge/basics/web-ui/> |
+| hyperHDR address | `host:port` of your HyperHDR server, e.g. `tv.local:8090` — <https://github.com/awawa-dev/HyperHDR> |
+
 ## Install
 
 Open PowerShell 7 **in this folder** and run:
@@ -57,4 +70,4 @@ ready.
   (the marked managed block), then restart AppDaemon. Your data lives at
   `store_root` and survives removal.
 - Detailed reference (manual profile, noninteractive answers file, rollback
-  anatomy): [support/scene-studio/packaging/scene_studio/PORTABLE_INSTALL.md](support/scene-studio/packaging/scene_studio/PORTABLE_INSTALL.md)
+  anatomy): [PORTABLE_INSTALL.md](PORTABLE_INSTALL.md) in this folder
