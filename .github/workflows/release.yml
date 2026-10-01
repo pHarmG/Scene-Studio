@@ -1,0 +1,77 @@
+name: Versioned release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      SCENE_STUDIO_BUILD_CHANNEL: release
+      SCENE_STUDIO_RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate version, tag and clean source identity
+        run: python scripts/version.py
+      - name: Install test dependencies
+        run: python -m pip install pytest
+      - name: Backend tests
+        run: python -m pytest backend/tests -q
+      - name: Workbench validation
+        working-directory: workbench
+        run: |
+          npm ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run smoke
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run browser
+      - name: HA card validation
+        working-directory: home-assistant/scene-studio-card
+        run: |
+          npm ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run typecheck
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm test
+      - name: Installer acceptance (wizard, deployers, browser UI, release bootstrap)
+        run: python -m pytest tests/installer -q
+      - name: Secret scan
+        run: python scripts/security/scan_secrets.py
+      - name: Package and verify authoritative payload
+        run: |
+          python scripts/build_release.py --refresh --zip
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pwsh -NoProfile -File installer/verify_release_manifest.ps1 -ReleaseRoot dist/scene-studio-release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item installer/Get-SceneStudio.ps1 dist/Get-SceneStudio.ps1
+      - name: Publish release only after all gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          @'
+          Download Scene-Studio-v<version>.zip and SHA256SUMS.txt, verify the checksum, extract, then run pwsh ./Install-SceneStudio.ps1 (or python installer/ui/server.py).
+
+          Alternatively download Get-SceneStudio.ps1 and run it with PowerShell 7. It retrieves and verifies the complete payload before opening the same guided installer. Private repository access requires signing in for manual downloads or an optional SCENE_STUDIO_GITHUB_TOKEN with Contents read permission for the bootstrap.
+
+          The ZIP is the complete product. GitHub source-code archives are for developers. Workbench update checks and downloads never install automatically.
+          '@ | ForEach-Object { $_ -replace '<version>', $version } | Set-Content -LiteralPath dist/release-notes.md
+          gh release create "v$version" "dist/Scene-Studio-v$version.zip" dist/SHA256SUMS.txt dist/Get-SceneStudio.ps1 --verify-tag --title "Scene Studio v$version" --notes-file dist/release-notes.md --generate-notes

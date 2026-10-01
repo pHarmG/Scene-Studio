@@ -394,9 +394,13 @@ class FakeHost:
                 name_filter = words[index + 1]
             index += 1
         pattern = "*" if name_filter in (None, "*") else name_filter
+        if "-o" in words and "build-info.json" in words:
+            pattern = "*"
         results = []
         for path in sorted(self.cwd.rglob(pattern)):
             if not path.is_file():
+                continue
+            if "-o" in words and "build-info.json" in words and path.suffix != ".py" and path.name != "build-info.json":
                 continue
             results.append("./" + path.relative_to(self.cwd).as_posix())
         return 0, "\n".join(results)

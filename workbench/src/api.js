@@ -83,6 +83,7 @@ import {
 // Static imports (not import.meta.glob) so this DOM-free module stays
 // importable under plain Node (scripts/smoke.mjs).
 import { buildMockLiveFixtureState } from "./mocks/live_state.js";
+import { localBuild } from "./product.js";
 import goldenAuroraFlow from "./mocks/render_plans/aurora_flow.json" with { type: "json" };
 import goldenMeetingBlue from "./mocks/render_plans/meeting_blue.json" with { type: "json" };
 import goldenTwilight from "./mocks/render_plans/twilight.json" with { type: "json" };
@@ -912,6 +913,7 @@ export function createMockSceneStudioClient(baseData, options = {}) {
   };
 
   const getStatus = () => ({
+    product: { name: "Scene Studio", build: localBuild, update: { state: "unchecked", message: "Updates have not been checked." } },
     // Engine-shaped status (SceneStudioEngine.status() stable keys, engine.py).
     engine: {
       ok: true,
@@ -1886,6 +1888,9 @@ export function createMockSceneStudioClient(baseData, options = {}) {
 
     /** @returns {object} see SceneStudioClient#getStatus */
     getStatus,
+    async checkUpdates() {
+      return { state: "unavailable", message: "Update checks are available on an installed backend." };
+    },
 
     async getFixtures() {
       const doc = clone(data.registry);
@@ -2210,6 +2215,10 @@ export function createHttpSceneStudioClient(baseUrl, options = {}) {
 
     async getStatus() {
       return normalizeEngineStatus(await readJson("/api/scene_studio/status"));
+    },
+    async checkUpdates() {
+      const status = await readJson("/api/scene_studio/status", { check_updates: "true" });
+      return status.product?.update || { state: "unavailable", message: "This backend does not support update checks." };
     },
 
     async getFixtures() {

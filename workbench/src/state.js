@@ -280,6 +280,7 @@ export function createStore(client) {
     scenarios: typeof client?.listScenarios === "function" ? client.listScenarios() : [],
     selection: null, // WorkbenchSelection | null
     status: null,
+    updateCheck: null,
     fixtures: null, // registry doc with derived health
     scenes: null, // scenes doc
     discovery: null, // discovery report | null (live: none until discovery.run)
@@ -536,6 +537,17 @@ export function createStore(client) {
 
   return {
     state,
+
+    async checkUpdates() {
+      if (state.updateCheck?.state === "checking") return;
+      const source = active;
+      state.updateCheck = { state: "checking", message: "Checking GitHub Releases…" };
+      notify();
+      let result;
+      try { result = await source.checkUpdates(); }
+      catch { result = { state: "error", message: "Update check failed. Try again later." }; }
+      if (source === active) { state.updateCheck = result; notify(); }
+    },
 
     /** @param {(state: object) => void} fn */
     subscribe(fn) {
@@ -945,6 +957,7 @@ export function createStore(client) {
      * @returns {Promise<boolean>}
      */
     async setConnection({ mode, url } = {}) {
+      state.updateCheck = null;
       if (mode === "live") {
         // An explicit empty URL is valid (same-origin AppDaemon transport);
         // only fall back when the caller omitted url entirely.

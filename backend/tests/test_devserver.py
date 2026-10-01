@@ -129,7 +129,7 @@ def test_get_status_returns_engine_shape(server):
     status, body, _ = _request(server, "GET", "/api/scene_studio/status")
     assert status == 200
     # STABLE KEYS documented in engine.py status() docstring
-    assert set(body.keys()) == {"engine", "runtime", "fixtures", "providers", "current", "playback", "contention", "last_discovery"}
+    assert set(body.keys()) == {"engine", "runtime", "fixtures", "providers", "current", "playback", "contention", "last_discovery", "product"}
     assert body["runtime"]["mode"] == "normal"
     assert "scene.apply" in body["runtime"]["allowed_commands"]
     assert set(body["engine"].keys()) == {"ok", "revision", "event_capacity", "events"}

@@ -63,7 +63,23 @@ def test_status_route(engine):
     status, payload = route(engine, "GET", "/api/scene_studio/status")
     assert status == 200
     assert payload["engine"]["ok"] is True
+    assert payload["product"]["build"]["version"]
+    assert payload["product"]["update"]["state"] == "unchecked"
     assert {"engine", "fixtures", "providers", "current", "playback", "last_discovery"} <= set(payload)
+
+
+def test_update_check_explicit_status_contract(engine, monkeypatch):
+    calls = []
+    def check(version):
+        calls.append(version)
+        return {"state": "current"}
+    monkeypatch.setattr("scene_studio.service.engine.check_updates", check)
+    revision = engine.status()["engine"]["revision"]
+    assert not calls
+    code, body = route(engine, "GET", "/api/scene_studio/status", query={"check_updates": "true"})
+    assert code == 200 and calls
+    assert body["product"]["update"]["state"] == "current"
+    assert body["engine"]["revision"] == revision
 
 
 def test_fixtures_route_returns_registry_and_redacts(engine):

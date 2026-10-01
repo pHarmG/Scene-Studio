@@ -12,6 +12,7 @@ import re
 from typing import Any
 
 JWT_RE = re.compile(r"\beyJ?[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]{8,})?\b")
+GITHUB_CREDENTIAL_RE = re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b")
 
 SENSITIVE_KEY_RE = re.compile(
     r"(?i)(token|password|passwd|secret|api[_-]?key|apikey|authorization|"
@@ -23,11 +24,11 @@ REDACTED_JWT = "[REDACTED-JWT]"
 
 
 def contains_secret_shape(value: str) -> bool:
-    return bool(JWT_RE.search(value))
+    return bool(JWT_RE.search(value) or GITHUB_CREDENTIAL_RE.search(value))
 
 
 def sanitize_string(value: str) -> str:
-    return JWT_RE.sub(REDACTED_JWT, value)
+    return GITHUB_CREDENTIAL_RE.sub(REDACTED, JWT_RE.sub(REDACTED_JWT, value))
 
 
 def sanitize_tree(obj: Any) -> Any:

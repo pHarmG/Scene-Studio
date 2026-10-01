@@ -32,6 +32,9 @@ Public surface
   ``getStatus`` polling (plan §9.4). STABLE KEYS (do not rename)::
 
       {
+        "product":       {"name", "build": {"version", "source_sha", "short_sha",
+                          "channel", "dirty", "tag", "source_tree_sha256", "built_at"},
+                          "update": {"state", "message", "release_url"}},
         "engine":        {"ok", "revision", "event_capacity", "events"},
         "fixtures":      {"total", "ready", "missing", "disabled",
                           "unbound", "degraded", "conflicting"},
@@ -86,6 +89,8 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
+from ..build_info import get_build_info
+from ..updates import check_updates, unchecked
 from collections import deque
 from dataclasses import dataclass
 
@@ -481,6 +486,8 @@ class SceneStudioEngine:
                     "summary": dict(self._last_discovery.summary),
                 }
             return {
+                "product": {"name": "Scene Studio", "build": getattr(self, "_product_build", None) or get_build_info(),
+                            "update": getattr(self, "_product_update", None) or unchecked()},
                 "engine": {
                     "ok": True,
                     "revision": self._revision,
@@ -507,6 +514,14 @@ class SceneStudioEngine:
                 "contention": self._contention.status_view(),
                 "last_discovery": last_discovery,
             }
+
+    def check_updates(self) -> None:
+        # Explicit request only; network I/O stays outside the command lock.
+        build = getattr(self, "_product_build", None) or get_build_info()
+        update = check_updates(build["version"])
+        with self._lock:
+            self._product_build = build
+            self._product_update = update
 
     def recent_events(self, n: int = 50) -> list[OperationalEvent]:
         """Up to ``n`` most recent events, newest first."""

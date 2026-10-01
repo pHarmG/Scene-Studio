@@ -1,4 +1,10 @@
 import { defineConfig } from "vite";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const productBuild = JSON.parse(execFileSync(process.env.PYTHON || "python", [
+  fileURLToPath(new URL("../scripts/version.py", import.meta.url)),
+], { encoding: "utf8" }));
 
 // Relative assets: the SPA is served from a sub-path (/local/scene_studio/)
 // by the AppDaemon static route, so absolute /assets/... URLs would 404.
@@ -33,6 +39,10 @@ if (liveHost) {
 }
 
 export default defineConfig({
+  define: { __SCENE_STUDIO_BUILD__: JSON.stringify(productBuild) },
+  plugins: [{ name: "scene-studio-build-identity", generateBundle() {
+    this.emitFile({ type: "asset", fileName: "build-info.json", source: JSON.stringify(productBuild, null, 2) + "\n" });
+  } }],
   base: "./",
   server: {
     port: process.env.PORT ? Number(process.env.PORT) : 5173,

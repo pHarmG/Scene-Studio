@@ -40,6 +40,9 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "backend/src"))
+from scene_studio.build_info import checkout_build
+from version import validate_versions
 DIST_DIR = REPO_ROOT / "dist" / "scene-studio-release"
 
 # ---------------------------------------------------------------------------
@@ -269,8 +272,17 @@ def main(argv=None) -> int:
         default=str(DIST_DIR),
         help=f"output directory (default: {DIST_DIR}; the acceptance harness uses a temp dir)",
     )
-    parser.add_argument("--zip", action="store_true", help="also write <out-dir-name>.zip next to the output")
+    parser.add_argument("--zip", action="store_true", help="also write Scene-Studio-v<VERSION>.zip and SHA256SUMS.txt next to the output")
     args = parser.parse_args(argv)
+
+    validate_versions()
+    build = checkout_build(REPO_ROOT, os.environ.get("SCENE_STUDIO_BUILD_CHANNEL", "local"), os.environ.get("SCENE_STUDIO_RELEASE_TAG"))
+    frontend_build = json.loads((REPO_ROOT / "workbench/dist/build-info.json").read_text(encoding="utf-8"))
+    for key in ("version", "source_sha", "source_tree_sha256", "channel", "dirty", "tag"):
+        if frontend_build.get(key) != build[key]:
+            raise SystemExit(f"Workbench build identity mismatch ({key}); rebuild Workbench before packaging")
+    # One frozen identity shared by both installed surfaces.
+    build = frontend_build
 
     out_dir = Path(args.out).resolve()
     if out_dir.exists():
@@ -280,6 +292,8 @@ def main(argv=None) -> int:
     out_dir.mkdir(parents=True)
 
     copied = copy_allowlist(out_dir)
+    (out_dir / "backend/src/scene_studio/build-info.json").write_text(json.dumps(build, indent=2) + "\n", encoding="utf-8")
+    (out_dir / "BUILD.json").write_text(json.dumps(build, indent=2) + "\n", encoding="utf-8")
     print(f"release: copied {len(copied)} files from the allowlist")
 
     gate_workbench_dist(out_dir)
@@ -316,7 +330,7 @@ def main(argv=None) -> int:
     if args.zip:
         import zipfile
 
-        zip_path = out_dir.parent / (out_dir.name + ".zip")
+        zip_path = out_dir.parent / ("Scene-Studio-v" + build["version"] + ".zip")
         if zip_path.exists():
             zip_path.unlink()
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -324,6 +338,8 @@ def main(argv=None) -> int:
                 if path.is_file():
                     archive.write(path, path.relative_to(out_dir.parent).as_posix())
         print(f"release: zip written ({zip_path})")
+        digest = hashlib.sha256(zip_path.read_bytes()).hexdigest()
+        (out_dir.parent / "SHA256SUMS.txt").write_text(f"{digest}  {zip_path.name}\n", encoding="utf-8", newline="\n")
 
     summary = {
         "release_root": str(out_dir),

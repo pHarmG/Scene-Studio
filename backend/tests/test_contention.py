@@ -33,7 +33,7 @@ from scene_studio.domain.playback import (
 from scene_studio.service import SceneStudioEngine, SteppingClock
 from scene_studio.service.ports import DiscoveryFetchers, RecordingExecutor
 from scene_studio.stores import SceneStudioStore
-from tests.test_service_engine import make_store
+from test_service_engine import make_store
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "recorded"
 

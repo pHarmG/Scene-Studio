@@ -53,6 +53,8 @@ def route(engine, method: str, path: str, body: dict | None = None, query: dict 
         return _not_found(normalized_method, path)
 
     if normalized_path == "/status" and normalized_method == "GET":
+        if _flag(query, "check_updates"):
+            engine.check_updates()
         return 200, engine.status()
 
     if normalized_path == "/fixtures" and normalized_method == "GET":

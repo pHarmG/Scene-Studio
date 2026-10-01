@@ -405,6 +405,7 @@ def test_wizard_provider_profile_and_secret_handling(release_dir, tmp_path):
     _seed_fresh_target(state_dir)
     with FakeHaApi() as api:
         env = _wizard_env(tmp_path, state_dir, hue_key=FAKE_HUE_KEY)
+        env['SCENE_STUDIO_GITHUB_TOKEN'] = 'synthetic-private-access-marker'
         answers = _write_answers(
             tmp_path / "answers.json",
             ha_url=f"http://127.0.0.1:{api.port}",
@@ -447,6 +448,7 @@ def test_wizard_config_rollback_and_sanitized_support_report(release_dir, tmp_pa
     (state_dir / "fail_backend_staging").write_text("")
     with FakeHaApi() as api:
         env = _wizard_env(tmp_path, state_dir, hue_key=FAKE_HUE_KEY)
+        env['SCENE_STUDIO_GITHUB_TOKEN'] = 'synthetic-private-access-marker'
         answers = _write_answers(
             tmp_path / "answers.json",
             ha_url=f"http://127.0.0.1:{api.port}",
@@ -476,6 +478,7 @@ def test_wizard_config_rollback_and_sanitized_support_report(release_dir, tmp_pa
             payload = archive.read(name).decode("utf-8", errors="replace")
             assert FAKE_HA_TOKEN not in payload, f"token leaked into {name}"
             assert FAKE_HUE_KEY not in payload, f"hue key leaked into {name}"
+            assert 'synthetic-private-access-marker' not in payload
     # stage + remote-change status are recorded
     with zipfile.ZipFile(zip_path) as archive:
         report_name = next(name for name in members if name.endswith("support-report.json"))

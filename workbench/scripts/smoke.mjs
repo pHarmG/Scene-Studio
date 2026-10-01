@@ -2650,6 +2650,29 @@ async function main() {
   // --- appdaemon named-endpoint transport (envelope POST -> {status, body})
   await runAppDaemonTransportChecks();
 
+  // Explicit update checks never run on init/poll and keep failures local.
+  const updateClient = createMockSceneStudioClient(baseData);
+  let checkCalls = 0;
+  let resolveCheck;
+  updateClient.checkUpdates = () => {
+    checkCalls++;
+    return new Promise(resolve => { resolveCheck = resolve; });
+  };
+  const updateStore = createStore(updateClient);
+  await updateStore.init();
+  await updateStore.poll();
+  check('updates: init and polling never query release source', checkCalls === 0);
+  const checking = updateStore.checkUpdates();
+  check('updates: checking state is immediate', updateStore.state.updateCheck.state === 'checking');
+  await updateStore.checkUpdates();
+  check('updates: duplicate in-flight checks suppressed', checkCalls === 1);
+  resolveCheck({ state: 'available', latest_version: '0.2.0' });
+  await checking;
+  check('updates: result reaches store', updateStore.state.updateCheck.state === 'available');
+  updateClient.checkUpdates = async () => { throw new Error('synthetic-private-access-marker'); };
+  await updateStore.checkUpdates();
+  check('updates: failure does not leak exception detail', updateStore.state.updateCheck.state === 'error' && !JSON.stringify(updateStore.state.updateCheck).includes('synthetic-private-access-marker'));
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }

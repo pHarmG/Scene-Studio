@@ -37,6 +37,19 @@ system **from your normal computer** — nothing is installed on your PC.
 
 ## Install
 
+Start at [GitHub Releases](https://github.com/pHarmG/Scene-Studio/releases).
+Sign in for private access. Download `Scene-Studio-v<version>.zip` and
+`SHA256SUMS.txt`; compare the ZIP's `Get-FileHash -Algorithm SHA256` output to
+its checksum before extracting. The complete payload is in `scene-studio-release/`.
+The GitHub source-code archives are for developers/operators.
+
+For a single downloadable entry point, use the Release asset
+`Get-SceneStudio.ps1`: `pwsh ./Get-SceneStudio.ps1`. It downloads the full ZIP,
+checks its published checksum and byte-exact manifest, and delegates to the
+guided installer. Private access optionally reads `SCENE_STUDIO_GITHUB_TOKEN`
+from the process environment (Contents read permission); no token is stored.
+If access is unavailable, use the signed-in manual download above.
+
 Open PowerShell 7 **in this folder** and run:
 
 ```powershell

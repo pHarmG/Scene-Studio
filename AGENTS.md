@@ -48,6 +48,41 @@ Scene Studio implementation in Home-Tech.
 
 ## Standard commands
 
+Root `VERSION` is the canonical semantic product version. `scripts/version.py`
+validates backend pyproject and Workbench package/lock declarations against it;
+`__version__` derives from build metadata. Vite builds and release packaging run
+this gate. Change those declarations together when changing VERSION.
+
+`/status.product.build` contains `version`, `source_sha`, `short_sha`, `channel`
+(`release` or `local`), `dirty`, `tag`, `source_tree_sha256`, and `built_at`.
+The source fingerprint distinguishes different local patches at the same SHA.
+Generated `BUILD.json`,
+backend `build-info.json`, and Workbench `build-info.json` freeze the identity.
+Deployers copy and hash-check that metadata with the payload. A local patch
+retains the semantic version and identifies its source SHA/dirty state.
+
+Create an official release by committing a version change, tagging that clean
+commit `v<VERSION>`, and pushing the tag. `.github/workflows/release.yml` runs
+the standard validations, builds with `SCENE_STUDIO_BUILD_CHANNEL=release` and
+`SCENE_STUDIO_RELEASE_TAG=v<VERSION>`, then publishes only after packaging and
+manifest verification. The tag must match VERSION and HEAD; dirty release
+builds fail. Local `build_release.py` builds are labeled local.
+
+GitHub Release assets: `Scene-Studio-v<version>.zip` (complete authoritative
+payload with root wizard), `SHA256SUMS.txt`, and `Get-SceneStudio.ps1` (download
+bootstrap only). Never upload the support-dependent wizard alone. Bootstrap
+verifies checksum, archive paths, manifest, and release identity before delegation.
+
+`GET /status?check_updates=true` explicitly checks stable complete GitHub Releases;
+normal status polling never calls GitHub. `/status.product.update` carries the
+result. GitHub access is isolated in `updates.py`. Optional server-only
+`SCENE_STUDIO_GITHUB_TOKEN` uses Contents read permission. No credential is
+required for Scene Studio; absent private access means unavailable, never current.
+Tokens stay in process environments and must never enter assets, responses,
+logs, profiles, diagnostics, or support ZIPs. Workbench links to the signed-in
+Release page for intentional downloads; checking/downloading is distinct from
+applying. Every live apply still requires the exact approved installer change.
+
 ```powershell
 # backend tests (from backend/ or repo root)
 python -m pytest backend/tests -q
@@ -134,7 +169,7 @@ if it is absent, ask the user or work in mock/dev mode only.
   (`python -m scene_studio.devserver --seed-demo`), unit/interaction tests.
   No HA contact.
 - **Friend installation**: the release ZIP (GitHub Releases) or a clone +
-  `pwsh ./Install-SceneStudio.ps1`. The wizard's support-report ZIP (sanitized)
+  `pwsh ./installer/Install-SceneStudio.ps1`. The wizard's support-report ZIP (sanitized)
   is the failure channel back to maintainers.
 - **Release/distribution**: `python scripts/build_release.py --refresh --zip`
   runs the allowlist copy + portability + secret + import gates and writes

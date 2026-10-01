@@ -17,6 +17,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$ReleaseRoot = (Resolve-Path -LiteralPath $ReleaseRoot).Path.TrimEnd('\', '/')
 
 $manifestPath = Join-Path $ReleaseRoot 'MANIFEST.sha256'
 if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
@@ -47,7 +48,7 @@ if ($expected.Count -eq 0) {
 
 # 1. every manifest entry matches an existing file, byte for byte.
 foreach ($entry in $expected.Keys) {
-    if ($entry -match '(^|/)\.\.(/|$)' -or [System.IO.Path]::IsPathRooted($entry)) {
+    if ($entry -match '(^|/)\.\.(/|$)|\\|:' -or [System.IO.Path]::IsPathRooted($entry)) {
         throw "Unsafe manifest path: $entry"
     }
     $path = Join-Path $ReleaseRoot ($entry -replace '/', [System.IO.Path]::DirectorySeparatorChar)
@@ -69,7 +70,7 @@ foreach ($entry in $expected.Keys) {
 $unlisted = @()
 foreach ($file in Get-ChildItem -LiteralPath $ReleaseRoot -Recurse -File) {
     $relative = $file.FullName.Substring($ReleaseRoot.TrimEnd('\', '/').Length + 1).Replace('\', '/')
-    if ($relative.EndsWith('MANIFEST.sha256')) { continue }
+    if ($relative -eq 'MANIFEST.sha256') { continue }
     if (-not $expected.ContainsKey($relative)) {
         $unlisted += $relative
     }

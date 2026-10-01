@@ -525,6 +525,24 @@ async function main() {
       root().querySelector(".icon-btn[title^='System']").click();
       const drawer = await waitFor(() => root().querySelector("ss-drawer[floating]"));
       const drawerOpens = !!drawer;
+      const build = await fetch('build-info.json').then(r => r.json());
+      const versionRenders = root().querySelector('.product-version')?.textContent === 'v' + build.version;
+      const identityRenders = drawer?.querySelector('.build-label')?.textContent.includes(build.short_sha);
+      const updateStates = [];
+      for (const [state, label] of [['unchecked','Not checked'], ['checking','Checking…'], ['current','Current'], ['available','Update available'], ['unavailable','Check unavailable'], ['error','Error']]) {
+        app().store.state.updateCheck = { state, message: 'test', latest_version: state === 'available' ? '9.0.0' : null, release_url: 'https://github.com/pHarmG/Scene-Studio/releases' };
+        app().requestUpdate();
+        await app().updateComplete;
+        const section = root().querySelector('.update-section');
+        updateStates.push(section.querySelector('.update-state')?.textContent === label &&
+          section.querySelector('button').disabled === (state === 'checking') &&
+          (state !== 'available' || section.textContent.includes('Release notes and download')));
+      }
+      app().store.state.updateCheck = null;
+      app().requestUpdate();
+      await app().updateComplete;
+      root().querySelector('.update-section button').click();
+      const checkAction = !!(await waitFor(() => app().store.state.updateCheck?.state === 'unavailable'));
       if (drawer) drawer.querySelector(".system-head .close").click();
       await waitFor(() => !root().querySelector("ss-drawer[floating]"));
       app().store.setView("discovery");
@@ -533,6 +551,7 @@ async function main() {
         tabs,
         pillOk: !!pill,
         drawerOpens,
+        versionRenders, identityRenders, updateStates, checkAction,
         discoveryRenders: !!discovery,
       };
     })()`);
@@ -541,6 +560,8 @@ async function main() {
       !!shell && JSON.stringify(shell.tabs) === JSON.stringify(["Overview", "Scenes", "Fixtures"]) && shell.pillOk && shell.drawerOpens && shell.discoveryRenders,
       JSON.stringify(shell)
     );
+    check('product: canonical version and exact build render in shell/System', shell?.versionRenders && shell?.identityRenders, JSON.stringify(shell));
+    check('updates: all states render and explicit Check action works', shell?.updateStates?.every(Boolean) && shell?.checkAction, JSON.stringify(shell));
     // 5. WLED controller clustering (post-R5 visual polish): the 6
     //    wled_seg_* fixtures collapse into one <ss-fixture-cluster>, and a
     //    segment inside it is still individually selectable/inspectable by

@@ -241,6 +241,11 @@ def fresh_env(tmp_path):
 def test_release_manifest_verification_accept_and_reject(release_dir):
     ok = _run_ps(MANIFEST_TOOL, ["-ReleaseRoot", str(release_dir)], dict(os.environ))
     assert ok.returncode == 0, ok.stdout + ok.stderr
+    relative = subprocess.run(
+        ["pwsh", "-NoProfile", "-File", str(MANIFEST_TOOL), "-ReleaseRoot", release_dir.name],
+        cwd=release_dir.parent, capture_output=True, text=True,
+    )
+    assert relative.returncode == 0, relative.stdout + relative.stderr
     assert "byte-exact" in ok.stdout
 
     victim = release_dir / "installer" / "scene-studio-profile.py"
@@ -329,6 +334,9 @@ def test_fresh_install_end_to_end_through_stubs(release_dir, fresh_env, tmp_path
 
     # the deployed Workbench index is byte-identical to the release's
     assert workbench_index.read_bytes() == (release_dir / "workbench" / "dist" / "index.html").read_bytes()
+    deployed_identity = backend_adapter.parents[1] / 'build-info.json'
+    assert deployed_identity.read_bytes() == (release_dir / 'backend/src/scene_studio/build-info.json').read_bytes()
+    assert (workbench_index.parent / 'build-info.json').read_bytes() == (release_dir / 'workbench/dist/build-info.json').read_bytes()
 
 
 def test_fresh_install_requires_registry_admin_profile(release_dir, fresh_env, tmp_path):

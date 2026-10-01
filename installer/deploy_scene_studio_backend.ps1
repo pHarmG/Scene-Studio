@@ -157,6 +157,19 @@ function Get-SourceFiles {
     }
     $prefix = $SourceRoot.TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
     $files = @(Get-ChildItem -LiteralPath $SourceRoot -Recurse -File -Filter '*.py' | Sort-Object FullName)
+    $identity = Join-Path $SourceRoot 'build-info.json'
+    if (-not (Test-Path -LiteralPath $identity)) {
+        # Checkout deployment: freeze identity before copying, using the same
+        # canonical generator as release packaging. No credentials are read.
+        $generator = Join-Path $RepoRoot 'scripts/version.py'
+        if (-not (Test-Path -LiteralPath $generator)) { throw 'Build identity missing from backend payload.' }
+        $metadata = & python $generator
+        Assert-LastNativeCommand -Action 'Generating local build identity'
+        $identityDir = Join-Path $RepoRoot '.tmp_scene_studio'
+        New-Item -ItemType Directory -Path $identityDir -Force | Out-Null
+        $identity = Join-Path $identityDir 'build-info.json'
+        [IO.File]::WriteAllText($identity, ($metadata -join "`n"))
+    }
     if ($files.Count -eq 0) {
         throw "Scene Studio Python package contains no .py files: $SourceRoot"
     }
@@ -171,6 +184,11 @@ function Get-SourceFiles {
             Sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
         }
     }
+    $records = @($records) + @([PSCustomObject]@{
+        LocalPath = $identity
+        Relative = 'build-info.json'
+        Sha256 = (Get-FileHash -LiteralPath $identity -Algorithm SHA256).Hash.ToLowerInvariant()
+    })
     foreach ($required in @('__init__.py', 'appdaemon_adapter/adapter.py')) {
         if (-not ($records.Relative -contains $required)) {
             throw "Required Scene Studio source file is missing: $required"
@@ -205,7 +223,7 @@ function Assert-RemotePackageMatchesLocal {
         [Parameter(Mandatory = $true)][string]$RemoteDirectory
     )
     $quotedDirectory = ConvertTo-BashSingleQuoted $RemoteDirectory
-    $remoteListText = Invoke-HaSsh -Command "cd '$quotedDirectory' && find . -type f -name '*.py' | sed 's#^./##' | sort" -Action 'Listing deployed Scene Studio sources'
+    $remoteListText = Invoke-HaSsh -Command "cd '$quotedDirectory' && find . -type f \( -name '*.py' -o -name 'build-info.json' \) | sed 's#^./##' | sort" -Action 'Listing deployed Scene Studio sources'
     $remoteFiles = @($remoteListText -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     $localFiles = @($Files | ForEach-Object { $_.Relative } | Sort-Object)
     $difference = Compare-Object -ReferenceObject $localFiles -DifferenceObject $remoteFiles

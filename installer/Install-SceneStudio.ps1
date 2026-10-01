@@ -180,7 +180,7 @@ function Write-SupportReport {
         Add-WizardLog "FAILURE stage=$Stage reason=$Reason remote_changes=$RemoteChangeState"
 
         $secretValues = @()
-        foreach ($candidate in @($Context['HaToken'], $Context['HueAppKey'])) {
+        foreach ($candidate in @($Context['HaToken'], $Context['HueAppKey'], $env:SCENE_STUDIO_GITHUB_TOKEN)) {
             if ($candidate) { $secretValues += [string]$candidate }
         }
         $scrub = {

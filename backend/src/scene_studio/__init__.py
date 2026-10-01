@@ -49,7 +49,9 @@ from .stores import (
     StoreError,
 )
 
-__version__ = "0.1.0"
+from .build_info import get_build_info
+
+__version__ = get_build_info()["version"]
 
 __all__ = [
     "Binding",

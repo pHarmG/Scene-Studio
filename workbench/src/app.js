@@ -26,6 +26,7 @@
  * DOM entry: mounts <ss-app> into #app of index.html.
  */
 import { html, css, render } from "lit";
+import { buildLabel, updateLabels } from "./product.js";
 import {
   createMockSceneStudioClient,
   DEFAULT_ENDPOINT_NAME,
@@ -813,6 +814,18 @@ class SsApp extends SsLightElement {
     this.systemOpen = !this.systemOpen;
   }
 
+  #renderUpdate(s) {
+    const update = s.updateCheck || s.status?.product?.update || { state: "unchecked" };
+    return html`
+      <p class="update-state" role="status">${updateLabels[update.state] || "Check unavailable"}</p>
+      <p>${update.message || "Updates have not been checked."}</p>
+      ${update.latest_version ? html`<p>Installed: v${s.status?.product?.build?.version || "unknown"} · Latest: v${update.latest_version}</p>` : ""}
+      <button class="ss-btn" ?disabled=${update.state === "checking"} @click=${() => this.store.checkUpdates()}>Check for updates</button>
+      ${update.release_url ? html`<p><a href=${update.release_url} target="_blank" rel="noopener noreferrer">${update.state === "available" ? "Release notes and download" : "Open GitHub Releases"}</a></p>` : ""}
+      <p>Downloads are installed separately through the guided installer.</p>
+    `;
+  }
+
   #closeSystem() {
     this.systemOpen = false;
   }
@@ -933,6 +946,7 @@ class SsApp extends SsLightElement {
       <header class="top">
         <div class="top-inner">
           <h1>Scene Studio Workbench</h1>
+          <small class="product-version" style="color:var(--ss-text-dim);font-size:11px" title=${buildLabel(s.status?.product?.build)}>${s.status?.product?.build?.version ? `v${s.status.product.build.version}` : ""}</small>
           <span class="tag">${conn.mode === "live" ? "live" : "mock"}</span>
           <div class="spacer"></div>
           <button
@@ -1041,6 +1055,20 @@ class SsApp extends SsLightElement {
                 <div class="system-section">
                   <h3>Connection</h3>
                   ${this.#renderConnectionSection(conn)}
+                </div>
+
+                <div class="system-section product-section">
+                  <h3>Product</h3>
+                  <p class="build-label">${buildLabel(s.status?.product?.build)}</p>
+                  <dl class="policy-facts">
+                    <dt>Source commit</dt><dd style="overflow-wrap:anywhere">${s.status?.product?.build?.source_sha || "Unknown"}</dd>
+                    <dt>Built</dt><dd>${s.status?.product?.build?.built_at || "Unknown"}</dd>
+                    <dt>Source fingerprint</dt><dd style="overflow-wrap:anywhere">${s.status?.product?.build?.source_tree_sha256 || "Unknown"}</dd>
+                  </dl>
+                </div>
+                <div class="system-section update-section">
+                  <h3>Update</h3>
+                  ${this.#renderUpdate(s)}
                 </div>
 
                 ${conn.mode === "mock"

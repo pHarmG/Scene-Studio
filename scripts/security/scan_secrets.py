@@ -53,6 +53,7 @@ MAX_FILE_BYTES = 2_000_000
 # JWT-shaped strings: base64url header ".payload" (one staged copy of an HA
 # token lost its leading "e", so the header match is deliberately loose).
 JWT_RE = re.compile(r"\beyJ?[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]{8,})?\b")
+GITHUB_CREDENTIAL_RE = re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b")
 
 # Credential keys carrying long opaque values, e.g. hue_username: "Ab3xY...".
 KEYED_SECRET_RE = re.compile(
@@ -170,6 +171,8 @@ def scan(files: list[Path]) -> list[Finding]:
                 continue
             for match in JWT_RE.finditer(line):
                 findings.append(Finding(str(path), lineno, "jwt-shaped", match.group(0)[:24] + "..."))
+            for match in GITHUB_CREDENTIAL_RE.finditer(line):
+                findings.append(Finding(str(path), lineno, "github-credential", "[redacted]"))
             for match in KEYED_SECRET_RE.finditer(line):
                 value = match.group(2)
                 if not is_placeholder(value):

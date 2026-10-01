@@ -929,7 +929,7 @@ class InstallerSession:
                 child_env["SCENE_STUDIO_HA_TOKEN"] = self.ha_token
             if self.answers["providers"]["hue"]["enabled"] and self.hue_key:
                 child_env["SCENE_STUDIO_HUE_APP_KEY"] = self.hue_key
-            self._secrets_for_scrub = [v for v in (self.ha_token, self.hue_key) if v]
+            self._secrets_for_scrub = [v for v in (self.ha_token, self.hue_key, os.environ.get("SCENE_STUDIO_GITHUB_TOKEN")) if v]
 
             pwsh_path = find_tool("pwsh")
             if not pwsh_path:
