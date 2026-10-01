@@ -37,7 +37,10 @@ See [the update architecture](IN_APP_UPDATES.md).
 4. Click **Update** and explicitly confirm **0.1.0 → 0.1.1**.
 5. Observe download, verification, backup, staging, activation and reconnect.
    AppDaemon restarts once; a temporary disconnect is expected progress.
-6. Confirm **0.1.1** and the release source SHA in System → Product.
+6. Reload the page once, then confirm **0.1.1** and the release source SHA in
+   System → Product. The original published v0.1.0 reconnects its API but keeps
+   its running JavaScript; v0.1.1 adds automatic static reload for future updates
+   and defers that reload while a scene draft has unsaved changes.
 7. Edit a scene: expand a Palette row, then one assigned fixture's details.
    Exceptional fixtures/controllers are under Other lights. There is no
    standalone Overrides panel or Add Override selector.
