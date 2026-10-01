@@ -173,7 +173,7 @@ function Write-SupportReport {
         [Parameter(Mandatory = $true)][hashtable]$Context
     )
     try {
-        $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+        $stamp = "$(Get-Date -Format 'yyyyMMdd-HHmmss')-$([Guid]::NewGuid().ToString('N'))"
         $reportDir = Join-Path ([IO.Path]::GetTempPath()) "scene-studio-support-$stamp"
         New-Item -ItemType Directory -Path $reportDir | Out-Null
 
@@ -899,7 +899,7 @@ try {
     Write-Detail "secrets.yaml: $(if ($HasSecretsYaml) { 'present' } else { 'absent (will be created)' })"
 
     # generated deployment configuration (workstation temp dir; never in the release)
-    $WorkDir = Join-Path ([IO.Path]::GetTempPath()) "scene-studio-install-$(Get-Date -Format 'yyyyMMddTHHmmss')"
+    $WorkDir = Join-Path ([IO.Path]::GetTempPath()) "scene-studio-install-$(Get-Date -Format 'yyyyMMddTHHmmss')-$([Guid]::NewGuid().ToString('N'))"
     New-Item -ItemType Directory -Path $WorkDir | Out-Null
     $GeneratedProfile = Join-Path $WorkDir 'scene-studio.profile.json'
     # NB: assigning `if (...) { @() }` straight into a hashtable value unrolls
@@ -954,6 +954,8 @@ try {
     Write-Host "    AppDaemon (ssh):           $ResolvedSshDestination port $ResolvedSshPort"
     Write-Host "    Scene Studio HTTP:         $AppDaemonHttp"
     Write-Host "    AppDaemon config:          $AddonRoot"
+    Write-Host '    In-app update executor:    apps/scene_studio_update_supervisor.py + apps/scene_studio_release.py'
+    Write-Host '    Restart effect:            AppDaemon add-on only; companion resumes recovery after restart'
     Write-Host "    Scene Studio data:         $StoreRoot"
     Write-Host "    Deployment type:           $(if ($IsUpgrade) { 'upgrade of the existing install' } else { 'FRESH install' })"
     Write-Host "    Runtime mode:              $RuntimeMode$(if ($RuntimeMode -eq 'registry_admin') { '  (provider writes blocked until you deliberately enable them)' })"

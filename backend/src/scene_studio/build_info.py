@@ -53,7 +53,7 @@ def checkout_build(root: Path, channel: str = "local", tag: str | None = None) -
             raise ValueError("Release tag must identify HEAD")
         if SEMVER.fullmatch(version).group(4):
             raise ValueError("Stable release builds require a stable VERSION")
-    return {"version": version, "source_sha": sha, "short_sha": sha[:7] if sha else None,
+    return {"version": version, "update_protocol": 1, "source_sha": sha, "short_sha": sha[:7] if sha else None,
             "source_tree_sha256": source_digest,
             "channel": channel, "dirty": dirty, "tag": tag if channel == "release" else None,
             "built_at": datetime.now(timezone.utc).isoformat()}

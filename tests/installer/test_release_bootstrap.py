@@ -47,6 +47,8 @@ def test_bootstrap_verifies_before_delegation(release_dir, tmp_path, failure):
     if failure == "identity": identity["version"] = "99.0.0"
     payloads = {p.relative_to(release_dir).as_posix(): p.read_bytes() for p in release_dir.rglob("*") if p.is_file() and p.name != "MANIFEST.sha256"}
     payloads["BUILD.json"] = json.dumps(identity).encode()
+    payloads["backend/src/scene_studio/build-info.json"] = json.dumps(identity).encode()
+    payloads["workbench/dist/build-info.json"] = json.dumps(identity).encode()
     manifest = "\n".join(f"{hashlib.sha256(data).hexdigest()}  {len(data)}  {name}" for name, data in sorted(payloads.items())) + "\n"
     payloads["MANIFEST.sha256"] = manifest.encode()
     if failure == "manifest": payloads["VERSION"] = b"tampered"

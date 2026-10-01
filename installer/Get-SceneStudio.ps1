@@ -98,8 +98,10 @@ function Get-VerifiedSceneStudioRelease {
     try {
         $names = @{}
         foreach ($entry in $archive.Entries) {
-            $name = $entry.FullName.Replace('\', '/')
-            if ($name -notmatch '^scene-studio-release/' -or $name -match '(^|/)\.\.(/|$)|:|(^|/)\.(/|$)' -or $names.ContainsKey($name)) { throw 'Unsafe or duplicate ZIP entry.' }
+            $name = $entry.FullName
+            if ($name -notmatch '^scene-studio-release/' -or $name -match '\\|(^|/)\.\.(/|$)|:|(^|/)\.(/|$)|//|[. ](/|$)' -or $names.ContainsKey($name)) { throw 'Unsafe or duplicate ZIP entry.' }
+            $kind = (($entry.ExternalAttributes -shr 16) -band 61440)
+            if ($kind -notin @(0, 32768, 16384)) { throw 'Archive links and special files are forbidden.' }
             $names[$name] = $true
         }
     } finally { $archive.Dispose() }
@@ -112,6 +114,9 @@ function Get-VerifiedSceneStudioRelease {
     if ($LASTEXITCODE -ne 0) { throw 'Release manifest verification failed. Installer was not executed.' }
     $build = Get-Content -LiteralPath (Join-Path $root 'BUILD.json') -Raw | ConvertFrom-Json
     if ($build.version -ne $version -or $build.channel -ne 'release' -or $build.dirty -or $build.tag -ne $release.tag_name -or $build.source_sha -notmatch '^[0-9a-f]{40}$') { throw 'Release build identity mismatch.' }
+    # The same protocol/build validator used by the durable runtime supervisor.
+    & python -B -c 'import sys; from pathlib import Path; sys.path.insert(0,sys.argv[1]); from scene_studio.release_trust import verify_build; verify_build(Path(sys.argv[2]),sys.argv[3])' (Join-Path $root 'backend/src') $root $version
+    if ($LASTEXITCODE -ne 0) { throw 'Release update protocol or product identity mismatch.' }
     Write-Host "Verified release v$version at $root"
     return $root
 }

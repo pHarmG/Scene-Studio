@@ -11,6 +11,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 from .build_info import version_key
+from .release_trust import release_assets, TrustError
 
 REPOSITORY = "pHarmG/Scene-Studio"
 RELEASES_URL = f"https://github.com/{REPOSITORY}/releases"
@@ -47,9 +48,9 @@ def check_updates(installed: str | None, fetch=None) -> dict:
             raise ValueError()
         latest = tag[1:]
         latest_key = version_key(latest)
-        names = {asset["name"] for asset in release.get("assets", [])}
-        if (release.get("draft") or release.get("prerelease") or not latest_key[3]
-                or not {f"Scene-Studio-v{latest}.zip", "SHA256SUMS.txt"}.issubset(names)):
+        try:
+            release_assets(release)
+        except TrustError:
             return {**result, "state": "unavailable", "message": "No compatible complete release is available."}
         # Construct safe URLs from the validated tag; never echo GitHub fields,
         # exceptions, headers, or release bodies (which can contain credentials).

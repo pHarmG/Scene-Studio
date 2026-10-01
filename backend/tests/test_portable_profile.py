@@ -125,6 +125,10 @@ def test_render_apps_yaml_first_install_shape():
     assert "read_only: false" in block
     assert "legacy_events_enabled: false" in block
     assert "store_root: /config/scene_studio_store" in block
+    assert "scene_studio_update:" in block
+    assert "module: scene_studio_update_supervisor" in block
+    assert "class: SceneStudioUpdateSupervisor" in block
+    assert "config_root: /config" in block
     # provider keys only when configured
     assert "hue_ip: bridge.local" in block
     assert "hue_username: !secret hue_app_key" in block

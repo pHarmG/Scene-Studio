@@ -62,6 +62,14 @@ jobs:
           pwsh -NoProfile -File installer/verify_release_manifest.ps1 -ReleaseRoot dist/scene-studio-release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item installer/Get-SceneStudio.ps1 dist/Get-SceneStudio.ps1
+      - name: Verify Palette update with the published baseline
+        if: github.ref_name == 'v0.1.1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v0.1.0 --pattern Scene-Studio-v0.1.0.zip --pattern SHA256SUMS.txt --dir "$env:RUNNER_TEMP/palette-baseline"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/verify_palette_update_pair.py --old-zip "$env:RUNNER_TEMP/palette-baseline/Scene-Studio-v0.1.0.zip" --old-sums "$env:RUNNER_TEMP/palette-baseline/SHA256SUMS.txt" --new-zip dist/Scene-Studio-v0.1.1.zip --new-sums dist/SHA256SUMS.txt
       - name: Publish release only after all gates
         env:
           GH_TOKEN: ${{ github.token }}
@@ -72,6 +80,6 @@ jobs:
 
           Alternatively download Get-SceneStudio.ps1 and run it with PowerShell 7. It retrieves and verifies the complete payload before opening the same guided installer. Private repository access requires signing in for manual downloads or an optional SCENE_STUDIO_GITHUB_TOKEN with Contents read permission for the bootstrap.
 
-          The ZIP is the complete product. GitHub source-code archives are for developers. Workbench update checks and downloads never install automatically.
+          The ZIP is the complete product. GitHub source-code archives are for developers. The guided installer provisions the independent recovery companion; Workbench Update requires explicit version confirmation. Update checks never install automatically.
           '@ | ForEach-Object { $_ -replace '<version>', $version } | Set-Content -LiteralPath dist/release-notes.md
           gh release create "v$version" "dist/Scene-Studio-v$version.zip" dist/SHA256SUMS.txt dist/Get-SceneStudio.ps1 --verify-tag --title "Scene Studio v$version" --notes-file dist/release-notes.md --generate-notes

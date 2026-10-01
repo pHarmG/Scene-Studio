@@ -5,7 +5,7 @@
  * ordinary authoring controls, in this information hierarchy:
  *
  *   Identity → Targets → Scene Defaults → Motion (Palette; Static assignment) →
- *   Overrides → Preview → Actions
+ *   Palette membership → optional fixture details → Preview → Actions
  *
  * Capability scope (Builder-expansion plan):
  * - §1 targets: declared Rooms as named chips, HA Light Group helpers as
@@ -59,7 +59,6 @@ import {
   paletteUsageCounts,
   resolveClusterPalette,
   resolveFixturePalette,
-  usesPalette,
 } from "../palette_assign.js";
 
 /** Neutral starting swatches for "Add color" (cycled). */
@@ -153,9 +152,6 @@ export class SsViewSceneBuilder extends SsLightElement {
     .col-targets .section,
     .col-look .section {
       margin-bottom: 0;
-    }
-    #builder-overrides {
-      margin-top: 16px;
     }
     .motion-section {
       padding: 12px;
@@ -764,6 +760,18 @@ export class SsViewSceneBuilder extends SsLightElement {
     .palette-row-fixtures .hint {
       margin: 4px 0;
     }
+    .fixture-details {
+      margin: 2px 0 8px 12px;
+      padding: 12px;
+      border-left: 2px solid var(--ss-border-soft);
+      min-width: 0;
+    }
+    .assign-summary { display: block; font-size: 12px; color: var(--ss-text-dim); margin-top: 3px; }
+    .assign-main { flex-wrap: wrap; }
+    .assign-summary { flex-basis: 100%; order: 3; }
+    .other-lights, .unresolved-state { margin-top: 12px; }
+    .other-lights > summary, .unresolved-state > summary { cursor: pointer; padding: 8px 0; }
+    .advanced-state { width: 100%; min-width: 0; box-sizing: border-box; font: inherit; }
     .assign-list {
       display: flex;
       flex-direction: column;
@@ -1035,64 +1043,6 @@ export class SsViewSceneBuilder extends SsLightElement {
     .slider-row .ends {
       font-size: 11px;
       color: var(--ss-text-faint);
-    }
-    .override-list {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .override {
-      border: 1px solid var(--ss-border-soft);
-      border-radius: 14px;
-      background: var(--ss-surface-2);
-    }
-    .override > summary {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px;
-      min-height: var(--ss-control-h);
-      box-sizing: border-box;
-      cursor: pointer;
-      font-size: 15px;
-      list-style: none;
-    }
-    .override > summary::-webkit-details-marker {
-      display: none;
-    }
-    .override > summary .fname {
-      font-weight: 600;
-    }
-    .override > summary .fid {
-      display: none;
-    }
-    .override > summary .summary {
-      font-size: 13px;
-      color: var(--ss-text-faint);
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .override .body {
-      padding: 4px 12px 12px;
-    }
-    .override-add {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 10px;
-      font-size: 14px;
-      color: var(--ss-text-dim);
-      flex-wrap: wrap;
-    }
-    .override-add select {
-      min-width: 220px;
-    }
-    .orphan-overrides {
-      margin-top: 8px;
-      border-top: 1px dashed var(--ss-border-soft);
-      padding-top: 6px;
     }
     .orphan-row {
       display: flex;
@@ -1525,6 +1475,16 @@ export class SsViewSceneBuilder extends SsLightElement {
       this.#patchState(scope, {
         color_temp_mirek: Math.max(100, Math.min(1000, Math.round(Number(el.value)))),
       });
+      return;
+    }
+    if (field === "gradient") {
+      if (e.type !== "change") return;
+      const stops = String(el.value || "").split(/[\s,]+/).filter(Boolean).map(value => value.toLowerCase());
+      this.#patchState(scope, { gradient: stops.length ? stops : null });
+      return;
+    }
+    if (field === "effect") {
+      this.#patchState(scope, { effect: el.value || null });
     }
   }
 
@@ -1749,7 +1709,7 @@ export class SsViewSceneBuilder extends SsLightElement {
   #renderPalette(draft, { showAssignment = false, resolved = [] } = {}) {
     const colors = draft.palette || [];
     const usage = showAssignment ? paletteUsageCounts(draft, resolved) : [];
-    const buckets = showAssignment ? this.#paletteBuckets(draft, resolved, colors) : null;
+    const buckets = this.#paletteBuckets(draft, resolved, colors);
     const rgbCount = resolved.filter((fixture) => fixtureTakesRgb(fixture)).length;
     const hint = !showAssignment
       ? "Colors this scene shows, in order."
@@ -1768,6 +1728,7 @@ export class SsViewSceneBuilder extends SsLightElement {
           ? html`<div class="palette-rows">
               ${colors.map(
                 (color, index) => html`
+                  <div class="palette-slot" data-palette-index=${index}>
                   <div class="palette-row">
                     <span class="ord">${index + 1}</span>
                     <input
@@ -1840,6 +1801,7 @@ export class SsViewSceneBuilder extends SsLightElement {
                   ${showAssignment && this._expandedPaletteIndex === index
                     ? this.#renderPaletteRowFixtures(draft, resolved, colors, buckets.byIndex.get(index) || [])
                     : ""}
+                  </div>
                 `
               )}
             </div>
@@ -1887,21 +1849,19 @@ export class SsViewSceneBuilder extends SsLightElement {
                   </button>`
                 : ""}
             </div>
-            ${showAssignment && buckets.other.length
-              ? html`
-                  <div class="section-head">
-                    <span class="field-label">Other lights</span>
-                    <span class="count">${buckets.other.length}</span>
-                  </div>
-                  <p class="hint">Custom colors and lights that can't take a palette color.</p>
-                  ${this.#renderAssignList(draft, resolved, colors, buckets.other)}
-                `
-              : ""}`
+            `
           : html`
               <button id="builder-add-color" class="palette-empty" @click=${() => this.#addColor()}>
                 ${showAssignment ? "+ Add colors, then tap a light to choose" : "+ Add the first palette color"}
               </button>
             `}
+        ${buckets.other.length ? html`
+          <details class="other-lights" open>
+            <summary>Other lights <span class="count">${buckets.other.length}</span></summary>
+            <p class="hint">Custom colors, gradients, mixed controllers and lights without a palette color.</p>
+            ${this.#renderAssignList(draft, resolved, colors, buckets.other)}
+          </details>` : ""}
+        ${this.#renderUnresolvedState(draft, resolved)}
         ${this.#errorFor("scene.palette")
           ? html`<div class="field-error">${this.#errorFor("scene.palette").message}</div>`
           : ""}
@@ -1942,7 +1902,7 @@ export class SsViewSceneBuilder extends SsLightElement {
         place(item, assignment.mixed ? null : assignment.index);
         continue;
       }
-      place(item, resolveFixturePalette(draft, item.fixture, resolved).index);
+      place(item, fixtureTakesRgb(item.fixture) ? resolveFixturePalette(draft, item.fixture, resolved).index : null);
     }
     return { byIndex, other };
   }
@@ -2019,13 +1979,20 @@ export class SsViewSceneBuilder extends SsLightElement {
     const rgb = fixtureTakesRgb(fixture);
     const mixed = !!assignment.mixed;
     const mode = !rgb ? "none" : mixed ? "mixed" : assignment.custom ? "custom" : assignment.pinned ? "pinned" : assignment.index != null ? "auto" : "none";
-    const open = rgb && !hidePicks && this._assigningFixtureId === assignKey;
-    const title = !rgb ? "This light cannot take a palette color" : "Choose a color for this light";
+    const open = !hidePicks && this._assigningFixtureId === assignKey;
+    const title = fold ? "Choose colors for this controller" : "Edit this light's look";
     const aura = this.#assignmentAura(draft, fixture, assignment);
     const currentHex = /^#[0-9a-f]{6}$/i.test(assignment.color || "") ? assignment.color : "#ffffff";
     const selectedIndex = !mixed && assignment.pinned ? assignment.index : null;
     const autoSelected = !mixed && mode === "auto";
+    const state = draft.fixture_states?.[fixture.id] || {};
+    const effective = { ...(draft.default_state || {}), ...state };
+    const assignmentSummary = assignment.index != null ? `palette #${assignment.index + 1}${assignment.pinned ? "" : " · automatic"}`
+      : assignment.custom ? "custom color" : "Scene Defaults";
+    const summary = fold ? (mixed ? "Mixed segment assignments" : assignmentSummary)
+      : [this.#stateSummary({ ...effective, color: undefined, palette_index: undefined }), assignmentSummary].join(" · ");
     return html`
+      <div class="palette-fixture" data-fixture-entry=${assignKey}>
       <div class="assign-row ${open ? "open" : ""}" data-fixture=${assignKey} data-mode=${mode}>
         <div class="assign-aura" style=${aura ? `background:${aura};opacity:1` : "opacity:0"} aria-hidden="true"></div>
         ${fold
@@ -2046,9 +2013,8 @@ export class SsViewSceneBuilder extends SsLightElement {
           type="button"
           class="assign-main builder-assign-chip"
           data-fixture=${assignKey}
-          ?disabled=${!rgb}
           title=${title}
-          aria-label=${`Choose color for ${name}`}
+          aria-label=${fold ? `Choose color for ${name}` : `Edit look for ${name}`}
           aria-expanded=${open ? "true" : "false"}
           @click=${() => {
             if (hidePicks) return;
@@ -2056,6 +2022,8 @@ export class SsViewSceneBuilder extends SsLightElement {
           }}
         >
           <span class="assign-name">${name}${nameMeta ? html`<span class="assign-name-meta">${nameMeta}</span>` : ""}</span>
+          <span class="assign-summary">${summary}</span>
+          <span aria-hidden="true">${iconChevronRight(14)}</span>
         </button>
         ${rgb && !hidePicks
           ? html`
@@ -2108,7 +2076,35 @@ export class SsViewSceneBuilder extends SsLightElement {
           `
           : ""}
       </div>
+      ${open && !fold ? this.#renderFixtureDetails(draft, fixture) : ""}
+      </div>
     `;
+  }
+
+  #renderFixtureDetails(draft, fixture) {
+    const state = draft.fixture_states?.[fixture.id] || {};
+    const advanced = describeFixtureState(state).advanced;
+    const customized = Object.keys(state).some(key => key !== "palette_index" && key !== "color");
+    return html`<div class="fixture-details" data-fixture-details=${fixture.id}>
+      <p class="hint">Unset fields inherit Scene Defaults. Color assignment changes only when you choose a color.</p>
+      ${advanced.length ? html`<p class="hint">Includes ${advanced.join(", ")}. Editing one field preserves the others.</p>` : ""}
+      ${this.#renderStateFields(fixture.id, state, { idPrefix: `builder-fixture-${fixture.id}` })}
+      ${customized ? html`<button class="row-btn builder-fixture-reset" @click=${() => this.store.resetBuilderFixtureDetails(fixture.id)}>Use Scene Defaults for details</button>` : ""}
+    </div>`;
+  }
+
+  #renderUnresolvedState(draft, resolved) {
+    const states = draft.fixture_states || {};
+    const ids = Object.keys(states).filter(id => !resolved.some(fixture => fixture.id === id));
+    if (!ids.length) return "";
+    return html`<details class="unresolved-state" id="builder-unresolved-state" open>
+      <summary>Unresolved fixture state <span class="count">${ids.length}</span></summary>
+      <p class="hint">These fixture IDs are no longer part of the selected targets. Add them to Targets or remove their unused state.</p>
+      ${ids.map(id => html`<div class="orphan-row" data-fixture=${id}>
+        <span class="fname">${id}</span><span class="fid">${this.#stateSummary(states[id])}</span>
+        <button class="row-btn builder-orphan-remove" data-fixture=${id} aria-label=${`Remove unresolved state for ${id}`} @click=${() => this.store.removeBuilderOverride(id)}>Remove</button>
+      </div>`)}
+    </details>`;
   }
 
   // ---- motion --------------------------------------------------------------
@@ -2240,7 +2236,7 @@ export class SsViewSceneBuilder extends SsLightElement {
       <div class="look-power">
         <span class="look-k">Power</span>
         <select class="state-on" data-scope=${scope} data-field="on" aria-label="On or off">
-          <option value="" ?selected=${onValue === ""}>not set</option>
+          <option value="" ?selected=${onValue === ""}>${scope === "default" ? "not set" : "Scene Defaults"}</option>
           <option value="on" ?selected=${onValue === "on"}>On</option>
           <option value="off" ?selected=${onValue === "off"}>Off</option>
         </select>
@@ -2383,6 +2379,16 @@ export class SsViewSceneBuilder extends SsLightElement {
           />
           <div class="look-ends"><span>Warm</span><span>Cool</span></div>
         </div>
+        ${scope !== "default" ? html`<details class="state-advanced">
+          <summary>Gradient and effect</summary>
+          <label class="hint">Gradient colors (hex, in order)
+            <textarea class="advanced-state state-gradient" data-scope=${scope} data-field="gradient" aria-label="Gradient colors" .value=${(state.gradient || []).join(", ")}></textarea>
+          </label>
+          <label class="hint">Effect name
+            <input class="advanced-state state-effect" data-scope=${scope} data-field="effect" aria-label="Effect name" maxlength="64" .value=${state.effect || ""} />
+          </label>
+          ${state.provider_ext || state.transition_ms != null ? html`<p class="hint">Existing provider-specific state and transition timing are preserved.</p>` : ""}
+        </details>` : ""}
         ${scopeError
           ? html`<div class="field-error" id=${`${idPrefix}-state-error`}>${scopeError.message}</div>`
           : ""}
@@ -2512,28 +2518,7 @@ export class SsViewSceneBuilder extends SsLightElement {
       }
     }
     const resolved = this.#resolvedFixtures();
-    const fixtureStates = draft.fixture_states || {};
-    // A fixture whose entire override is a palette pin and/or a plain color
-    // is fully owned by the palette assignment UI above (paint-use counts +
-    // "tap a light"); listing it again here as a bare "palette #N" line with
-    // only a Remove button was the redundant disjoint-panel UX being fixed.
-    // Anything with real advanced content (brightness, gradient, effect,
-    // on/off, provider_ext, ...) still belongs here.
-    const paletteOnlyOverride = (state) => {
-      if (!state) return false;
-      const keys = Object.keys(state);
-      return keys.length > 0 && keys.every((key) => key === "palette_index" || key === "color");
-    };
-    const paletteActive = usesPalette(draft);
-    const overrideIds = resolved
-      .filter((f) => fixtureStates[f.id] && !(paletteActive && paletteOnlyOverride(fixtureStates[f.id])))
-      .map((f) => f.id);
-    const orphanOverrides = Object.keys(fixtureStates).filter(
-      (id) => !resolved.some((f) => f.id === id)
-    );
-    const addableFixtures = resolved.filter((f) => !fixtureStates[f.id]);
     const defaults = draft.default_state || {};
-    const defaultsUsed = resolved.filter((f) => !fixtureStates[f.id]).length;
     const capabilitySummary = {
       color: resolved.filter((f) => f.capabilities && f.capabilities.color_xy).length,
       temp: resolved.filter((f) => f.capabilities && f.capabilities.color_temp).length,
@@ -2683,10 +2668,10 @@ export class SsViewSceneBuilder extends SsLightElement {
       <div class="section">
         <div class="section-head">
           <span class="field-label">Scene Defaults</span>
-          <span class="count">${defaultsUsed}/${resolved.length || 0}</span>
+          <span class="count">${resolved.length || 0} lights</span>
         </div>
         <p class="hint">
-          Shared look for fixtures without an override (${defaultsUsed} of ${resolved.length || 0}).
+          Shared look. Unset fixture details inherit these Scene Defaults.
         </p>
         ${this.#renderStateFields("default", defaults, {
           idPrefix: "builder-default",
@@ -2778,112 +2763,12 @@ export class SsViewSceneBuilder extends SsLightElement {
               </div>
             `
           : ""}
-        ${allowedMotionMode === "static" || allowedMotionMode === "palette_cycle"
-          ? this.#renderPalette(draft, { showAssignment: true, resolved })
-          : ""}
+        ${this.#renderPalette(draft, { showAssignment: true, resolved })}
         ${this.#errorFor("scene.motion")
           ? html`<div class="field-error">${this.#errorFor("scene.motion").message}</div>`
           : ""}
       </div>
       </div>
-      </div>
-
-      <div class="section" id="builder-overrides">
-        <div class="section-head">
-          <span class="field-label">Overrides</span>
-          <span class="count">${overrideIds.length}</span>
-        </div>
-        <p class="hint">
-          Per-fixture intent. Unset fields inherit Scene Defaults; removing an override returns the fixture to those
-          defaults.
-        </p>
-        <div class="override-list">
-          ${overrideIds.map((fixtureId) => {
-            const fixture = resolved.find((f) => f.id === fixtureId);
-            const state = fixtureStates[fixtureId];
-            const advancedState = describeFixtureState(state);
-            return html`
-              <details class="override" data-fixture=${fixtureId}>
-                <summary>
-                  <span class="fname">${(fixture && fixture.name) || fixtureId}</span>
-                  <span class="fid">${fixtureId}</span>
-                  <span class="summary">${this.#stateSummary(state)}</span>
-                  <button
-                    class="row-btn builder-override-remove"
-                    data-fixture=${fixtureId}
-                    title="Remove this override"
-                    aria-label="Remove override for ${(fixture && fixture.name) || fixtureId}"
-                    @click=${(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      this.store.removeBuilderOverride(fixtureId);
-                    }}
-                  >
-                    Remove
-                  </button>
-                </summary>
-                <div class="body">
-                  ${advancedState.advanced.length
-                    ? html`<p class="hint warn">
-                        This override also carries ${advancedState.advanced.join(", ")} content. It is preserved
-                        exactly; the controls below only touch the fields they own.
-                      </p>`
-                    : ""}
-                  ${this.#renderStateFields(fixtureId, state, { idPrefix: `builder-override-${fixtureId}` })}
-                  ${Object.keys(state).length === 0
-                    ? html`<p class="hint">No fields set — this override is empty and will be removed.</p>`
-                    : ""}
-                </div>
-              </details>
-            `;
-          })}
-          ${overrideIds.length === 0
-            ? html`<p class="hint">No overrides — every selected fixture uses the scene defaults.</p>`
-            : ""}
-        </div>
-        ${orphanOverrides.length
-          ? html`
-              <div class="orphan-overrides" id="builder-orphan-overrides">
-                <p class="hint warn">
-                  ${orphanOverrides.length} override${orphanOverrides.length === 1 ? "" : "s"} target fixtures that are
-                  not in the selected targets. The renderer ignores them, and they keep the preview reduced until they
-                  are removed — either remove them here, or add the fixture to the targets above.
-                </p>
-                <div class="override-list">
-                  ${orphanOverrides.map(
-                    (fixtureId) => html`
-                      <div class="orphan-row" data-fixture=${fixtureId}>
-                        <span class="fname">${fixtureId}</span>
-                        <span class="fid">${this.#stateSummary(fixtureStates[fixtureId])}</span>
-                        <button
-                          class="row-btn builder-orphan-remove"
-                          data-fixture=${fixtureId}
-                          title="Remove this override"
-                          aria-label="Remove override for ${fixtureId}"
-                          @click=${() => this.store.removeBuilderOverride(fixtureId)}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    `
-                  )}
-                </div>
-              </div>
-            `
-          : ""}
-        ${addableFixtures.length
-          ? html`
-              <div class="override-add">
-                <label for="builder-override-add">Add override for</label>
-                <select id="builder-override-add" @change=${this.#onAddOverride}>
-                  <option value="">choose a selected fixture…</option>
-                  ${addableFixtures.map(
-                    (f) => html`<option value=${f.id}>${f.name}</option>`
-                  )}
-                </select>
-              </div>
-            `
-          : ""}
       </div>
 
       ${quality ? this.#renderPreview(b, quality, preview) : ""}
@@ -2927,10 +2812,7 @@ export class SsViewSceneBuilder extends SsLightElement {
     `;
   }
 
-  #onAddOverride(e) {
-    const fixtureId = e.target.value;
-    if (fixtureId) this.store.addBuilderOverride(fixtureId);
-  }
+
 }
 
 customElements.define("ss-view-scene-builder", SsViewSceneBuilder);

@@ -331,6 +331,8 @@ def test_wizard_unreachable_ha_api_fails_before_remote_contact(release_dir, tmp_
 
 
 def test_wizard_zero_mutation_before_confirmation(release_dir, tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
     state_dir = tmp_path / "fake-ha-state"
     _seed_fresh_target(state_dir)
     with FakeHaApi() as api:
@@ -341,11 +343,14 @@ def test_wizard_zero_mutation_before_confirmation(release_dir, tmp_path):
             appdaemon_http_url=f"http://appdaemon.example.test:{api.port}",
             confirm_install=False,
         )
-        result = _run_wizard(release_dir, answers, env, yes=False)
-    output = _strip_ansi(result.stdout + result.stderr)
-    assert result.returncode == 0, output[-3000:]
-    assert "REVIEW ONLY" in output
-    assert "Nothing was changed" in output
+        # Independent workstation sessions must not share timestamp-named temp dirs.
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            results = list(workers.map(lambda _: _run_wizard(release_dir, answers, env, yes=False), range(2)))
+    for result in results:
+        output = _strip_ansi(result.stdout + result.stderr)
+        assert result.returncode == 0, output[-3000:]
+        assert "REVIEW ONLY" in output
+        assert "Nothing was changed" in output
     _assert_no_remote_writes(state_dir)
     assert not (state_dir / "fs" / ADDON_ROOT.strip("/") / "apps" / "scene_studio").exists()
 

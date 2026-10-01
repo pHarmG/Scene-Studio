@@ -874,6 +874,8 @@ class InstallerSession:
             {"label": "AppDaemon (ssh)", "value": f"{self._ssh_destination()} port {answers.get('ssh_port') or 22}"},
             {"label": "Scene Studio HTTP", "value": self.appdaemon_http_url()},
             {"label": "AppDaemon config", "value": profile["appdaemon_config_root"]},
+            {"label": "Update executor", "value": "apps/scene_studio_update_supervisor.py + apps/scene_studio_release.py; independent recovery companion"},
+            {"label": "Restart effect", "value": "AppDaemon add-on only; Home Assistant Core is preserved"},
             {"label": "Scene Studio data", "value": profile["store_root"]},
             {"label": "Deployment type", "value": "upgrade of the existing install" if install_kind == "upgrade" else "FRESH install"},
             {"label": "Runtime mode", "value": profile["runtime_mode"] + mode_note},

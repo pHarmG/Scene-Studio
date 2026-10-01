@@ -72,8 +72,12 @@ send to the maintainer.
 Workbench **System → Product** shows the installed semantic version, channel,
 source SHA, local modifications, and build timestamp. **System → Update → Check
 for updates** checks stable complete GitHub Releases on demand. No check runs
-on page load. A check or download never installs anything; upgrades use the
-same guided installer, review, backups, verification and rollback as installs.
+on page load. **Update** asks you to confirm the installed and target versions,
+then the independent AppDaemon companion verifies the exact Release artifact,
+backs up both product trees, activates them, restarts AppDaemon and verifies
+the new build. Workbench reconnects while showing update progress. Existing
+installations first need that companion provisioned by the guided installer;
+see [in-app updates](docs/installation/IN_APP_UPDATES.md).
 Optional private update access reads `SCENE_STUDIO_GITHUB_TOKEN` only in the
 AppDaemon server process environment. It is never required to run Scene Studio
 and is never sent to the browser. Without access, the check is unavailable.

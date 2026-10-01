@@ -26,7 +26,8 @@
  * DOM entry: mounts <ss-app> into #app of index.html.
  */
 import { html, css, render } from "lit";
-import { buildLabel, updateLabels } from "./product.js";
+import { buildLabel, updateLabels, localBuild } from "./product.js";
+import { executionLabels, updateRunning, updateReloadUrl } from "./update_execution.js";
 import {
   createMockSceneStudioClient,
   DEFAULT_ENDPOINT_NAME,
@@ -573,6 +574,7 @@ class SsApp extends SsLightElement {
     this._lastContentView = "overview";
     this._focusDiagnostics = false;
     this._beforeUnload = null;
+    this._updateReloadQueued = false;
   }
 
   connectedCallback() {
@@ -594,6 +596,7 @@ class SsApp extends SsLightElement {
       this.#syncPolling();
       this.#syncDirtyGuard();
       this.#maybeLandOnSetup();
+      this.#maybeReloadUpdatedWorkbench();
       this.requestUpdate();
     });
     this.#syncPolling();
@@ -622,6 +625,18 @@ class SsApp extends SsLightElement {
       this._beforeUnload = null;
     }
     super.disconnectedCallback();
+  }
+
+  _reloadWorkbench(url) { window.location.replace(url); }
+
+  #maybeReloadUpdatedWorkbench() {
+    if (this._updateReloadQueued || !updateReloadUrl(this.store.state, localBuild, window.location.href)) return;
+    this._updateReloadQueued = true;
+    setTimeout(() => {
+      const url = updateReloadUrl(this.store.state, localBuild, window.location.href);
+      if (url) this._reloadWorkbench(url);
+      else this._updateReloadQueued = false;
+    }, 250);
   }
 
   /**
@@ -812,6 +827,7 @@ class SsApp extends SsLightElement {
 
   #toggleSystem() {
     this.systemOpen = !this.systemOpen;
+    if (this.systemOpen) void this.store.inspectUpdate();
   }
 
   #renderUpdate(s) {
@@ -821,8 +837,21 @@ class SsApp extends SsLightElement {
       <p>${update.message || "Updates have not been checked."}</p>
       ${update.latest_version ? html`<p>Installed: v${s.status?.product?.build?.version || "unknown"} · Latest: v${update.latest_version}</p>` : ""}
       <button class="ss-btn" ?disabled=${update.state === "checking"} @click=${() => this.store.checkUpdates()}>Check for updates</button>
-      ${update.release_url ? html`<p><a href=${update.release_url} target="_blank" rel="noopener noreferrer">${update.state === "available" ? "Release notes and download" : "Open GitHub Releases"}</a></p>` : ""}
-      <p>Downloads are installed separately through the guided installer.</p>
+      ${update.release_url ? html`<p><a href=${update.release_url} target="_blank" rel="noopener noreferrer">${update.state === "available" ? "Release notes" : "Open GitHub Releases"}</a></p>` : ""}
+      ${update.state === "available" ? html`<button class="ss-btn update-apply" ?disabled=${!!s.updateConfirmation || updateRunning(s.updateExecution) || s.updateExecution?.recovery_required} @click=${() => this.store.reviewUpdate()}>Update</button>` : ""}
+      ${s.updateConfirmation ? html`<div class="update-confirmation" role="dialog" aria-label="Confirm Scene Studio update">
+        <p>Installed: v${s.updateConfirmation.installed}</p><p>Target: v${s.updateConfirmation.target}</p>
+        <p>Scene Studio executable and static files will be replaced. User scenes, stores and configuration are preserved. AppDaemon will restart.</p>
+        <button class="ss-btn update-confirm" @click=${() => this.store.confirmUpdate()}>Confirm update</button>
+        <button class="ss-btn" @click=${() => this.store.cancelUpdate()}>Cancel</button>
+      </div>` : ""}
+      ${s.updateExecution && s.updateExecution.state !== "idle" ? html`<div class="update-progress" role="status">
+        <strong>${s.updateExecution.rolled_back ? "Update rolled back" : executionLabels[s.updateExecution.state] || "Update status"}</strong>
+        <p>${s.updateExecution.message || ""}</p>
+        ${s.builder?.dirty && updateReloadUrl(s, localBuild, window.location.href, { allowDirty: true }) ? html`<p>Save or discard your draft to reload the updated Workbench.</p>` : ""}
+        ${s.updateExecution.recovery_required ? html`<button class="ss-btn" @click=${() => this.store.inspectUpdate()}>Refresh update status</button>` : ""}
+      </div>` : ""}
+      <p>Updates require the independent update companion provisioned by the guided installer.</p>
     `;
   }
 

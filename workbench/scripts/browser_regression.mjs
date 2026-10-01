@@ -115,9 +115,14 @@ async function launchChrome() {
   const deadline = Date.now() + 20000;
   while (Date.now() < deadline) {
     if (existsSync(portFile)) {
-      const content = readFileSync(portFile, "utf8").trim().split("\n");
-      if (content.length >= 2 && content[0].trim()) {
-        return { child, userDataDir, port: content[0].trim(), browserPath: content[1].trim() };
+      try {
+        const content = readFileSync(portFile, "utf8").trim().split("\n");
+        if (content.length >= 2 && content[0].trim()) {
+          return { child, userDataDir, port: content[0].trim(), browserPath: content[1].trim() };
+        }
+      } catch (error) {
+        // Windows can briefly lock the file while Chrome finishes writing it.
+        if (!["EBUSY", "ENOENT"].includes(error.code)) throw error;
       }
     }
     await sleep(150);
@@ -536,7 +541,7 @@ async function main() {
         const section = root().querySelector('.update-section');
         updateStates.push(section.querySelector('.update-state')?.textContent === label &&
           section.querySelector('button').disabled === (state === 'checking') &&
-          (state !== 'available' || section.textContent.includes('Release notes and download')));
+          (state !== 'available' || section.textContent.includes('Release notes')));
       }
       app().store.state.updateCheck = null;
       app().requestUpdate();
@@ -562,6 +567,128 @@ async function main() {
     );
     check('product: canonical version and exact build render in shell/System', shell?.versionRenders && shell?.identityRenders, JSON.stringify(shell));
     check('updates: all states render and explicit Check action works', shell?.updateStates?.every(Boolean) && shell?.checkAction, JSON.stringify(shell));
+    const updateExecution = await evaluate(`(async () => {
+      const app = document.querySelector('ss-app');
+      const root = app;
+      root.querySelector('.icon-btn[title^="System"]').click();
+      await app.updateComplete;
+      app.store.state.updateCheck = { state: 'available', latest_version: '0.1.1', release_url: 'https://github.com/pHarmG/Scene-Studio/releases/tag/v0.1.1' };
+      app.requestUpdate(); await app.updateComplete;
+      const available = !!root.querySelector('.update-apply');
+      root.querySelector('.update-apply').click(); await app.updateComplete;
+      const dialog = root.querySelector('.update-confirmation');
+      const confirmation = dialog?.textContent.includes('Installed: v') && dialog?.textContent.includes('Target: v0.1.1') && dialog?.textContent.includes('preserved') && !app.store.state.updateExecution;
+      root.querySelector('.update-confirm').click();
+      await new Promise(resolve => setTimeout(resolve, 50)); await app.updateComplete;
+      const mockRejected = app.store.state.updateExecution?.state === 'failed';
+      const stages = [];
+      for (const [state, label] of [['downloading','Downloading…'],['verifying','Verifying…'],['activating','Installing…'],['restarting','Restarting…'],['reconnecting','Waiting for Scene Studio…'],['verifying_new_build','Verifying update…'],['succeeded','Update complete'],['rollback','Rolling back…'],['failed','Update failed']]) {
+        app.store.state.updateExecution = { state, message: 'controlled executor fixture' };
+        app.requestUpdate(); await app.updateComplete;
+        stages.push(root.querySelector('.update-progress')?.textContent.includes(label));
+      }
+      app.store.state.updateExecution = {state:'failed',rolled_back:true,message:'Previous healthy build restored.'};
+      app.requestUpdate(); await app.updateComplete;
+      const rollback = root.querySelector('.update-progress')?.textContent.includes('Update rolled back');
+      app.store.state.updateCheck = null; app.store.state.updateExecution = null;
+      root.querySelector('ss-drawer[floating] .system-head .close').click();
+      await app.updateComplete;
+      return {available,confirmation,mockRejected,stages,rollback};
+    })()`);
+    check('updates: available, explicit confirmation, all execution phases and rollback render', updateExecution?.available && updateExecution?.confirmation && updateExecution?.mockRejected && updateExecution?.stages.every(Boolean) && updateExecution?.rollback, JSON.stringify(updateExecution));
+    // Palette is the only fixture-look hierarchy, including empty palettes.
+    // Update success must replace the executing JavaScript, not only the status label.
+    const staticReconnect = await evaluate(`(async () => {
+      const app = document.querySelector('ss-app');
+      const store = app.store;
+      const oldUrl = location.href, oldStatus = store.state.status, oldConn = store.state.conn;
+      const reload = app._reloadWorkbench;
+      const navigations = [];
+      app._reloadWorkbench = url => navigations.push(url);
+      try {
+        await store.openBuilder({sceneId:'twilight'});
+        const name = store.state.builder.draft.name;
+        store.patchBuilderDraft({name:name+' retained draft'});
+        history.replaceState(null, '', '/scene_studio/?keep=yes');
+        store.state.conn = {mode:'live',url:'',status:'connected'};
+        store.state.status = {...oldStatus,engine:{...oldStatus.engine,ok:true},
+          product:{build:{version:'0.9.0',source_sha:'b'.repeat(40),source_tree_sha256:'b'.repeat(64)}}};
+        store.state.updateExecution = {state:'succeeded',target_version:'0.9.0'};
+        store.patchBuilderDraft({name:name+' retained draft'});
+        await new Promise(r=>setTimeout(r,350));
+        const dirtyPreserved = navigations.length === 0 && store.state.builder.dirty;
+        store.patchBuilderDraft({name});
+        await new Promise(r=>setTimeout(r,350));
+        return {dirtyPreserved,reloaded:navigations.length===1 && navigations[0].includes('_scene_studio_build=0.9.0-') && navigations[0].includes('keep=yes')};
+      } finally {
+        store.state.updateExecution=null; store.state.status=oldStatus; store.state.conn=oldConn;
+        app._reloadWorkbench=reload; app._updateReloadQueued=false;
+        history.replaceState(null,'',oldUrl); store.closeBuilder();
+      }
+    })()`);
+    check('updates: verified success loads the new application and retains unsaved drafts', staticReconnect?.dirtyPreserved && staticReconnect?.reloaded, JSON.stringify(staticReconnect));
+
+    const paletteHierarchy = await evaluate(`(async () => {
+      const app = document.querySelector('ss-app');
+      const store = app.store;
+      const root = () => dom(app);
+      const view = () => root().querySelector('ss-view-scene-builder');
+      const br = () => dom(view());
+      const tick = async () => { await new Promise(r => setTimeout(r, 80)); };
+      await store.setScenario('all-healthy');
+      await store.openBuilder({ sceneId: 'twilight' });
+      await tick();
+      const legacyAbsent = !br().querySelector('#builder-overrides, #builder-override-add, .override-add');
+      const other = br().querySelector('.other-lights');
+      const gradientInOther = !!other?.querySelector('[data-fixture-entry="g_strip"]');
+      const mixedControllerInOther = !!other?.querySelector('.assign-cluster');
+      const membership = [];
+      for (const slot of br().querySelectorAll('.palette-slot')) {
+        slot.querySelector('.paint-use').click(); await tick();
+        const ids = [...slot.querySelectorAll('.palette-fixture')].map(el => el.dataset.fixtureEntry);
+        membership.push(ids.length > 0 && !!slot.querySelector('.palette-row-fixtures'));
+      }
+      store.patchBuilderDraft({ fixture_states: {}, default_state: { on: true, brightness: 55 } });
+      await tick();
+      let automatic;
+      for (const slot of br().querySelectorAll('.palette-slot')) {
+        slot.querySelector('.paint-use').click(); await tick();
+        automatic = br().querySelector('[data-fixture-entry="lamp"]');
+        if (automatic) break;
+      }
+      if (!automatic) return { fail: 'automatic palette member missing' };
+      const unchangedBefore = JSON.stringify(store.state.builder.draft.fixture_states);
+      automatic.querySelector('.builder-assign-chip').click(); await tick();
+      const openingUnchanged = unchangedBefore === JSON.stringify(store.state.builder.draft.fixture_states);
+      automatic.querySelector('.builder-state-set-brightness').click(); await tick();
+      const brightness = automatic.querySelector('.state-brightness-num');
+      brightness.value = '65'; brightness.dispatchEvent(new Event('input', { bubbles: true })); await tick();
+      const nestedEditable = store.state.builder.draft.fixture_states.lamp?.brightness === 65;
+      const automaticUnpinned = store.state.builder.draft.fixture_states.lamp?.palette_index === undefined;
+      store.patchBuilderOverride('lamp', { palette_index: 1 }); await tick();
+      let pinned;
+      for (const slot of br().querySelectorAll('.palette-slot')) {
+        if (slot.dataset.paletteIndex !== '1') continue;
+        slot.querySelector('.paint-use').click(); await tick();
+        pinned = slot.querySelector('[data-fixture-entry="lamp"]');
+        if (!pinned) { slot.querySelector('.paint-use').click(); await tick(); pinned = slot.querySelector('[data-fixture-entry="lamp"]'); }
+      }
+      if (!pinned) return { fail: 'pinned nested entry missing' };
+      if (!pinned.querySelector('.fixture-details')) { pinned.querySelector('.builder-assign-chip').click(); await tick(); }
+      pinned.querySelector('.builder-fixture-reset').click(); await tick();
+      const resetPreservesPin = JSON.stringify(store.state.builder.draft.fixture_states.lamp) === JSON.stringify({ palette_index: 1 });
+      const ids = [...br().querySelectorAll('#builder-palette .palette-fixture')].map(el => el.dataset.fixtureEntry);
+      const noDuplicates = new Set(ids).size === ids.length;
+      store.patchBuilderDraft({ palette: [] }); await tick();
+      const emptyPaletteEditable = !!br().querySelector('.other-lights [data-fixture-entry="lamp"]');
+      store.closeBuilder(); await store.setView('scenes');
+      return { legacyAbsent, gradientInOther, mixedControllerInOther, membership, openingUnchanged,
+        nestedEditable, automaticUnpinned, resetPreservesPin, noDuplicates, emptyPaletteEditable };
+    })()`);
+    check('palette hierarchy: exact row expands its own members, with no duplicate look list', paletteHierarchy?.legacyAbsent && paletteHierarchy?.membership?.every(Boolean) && paletteHierarchy?.noDuplicates, JSON.stringify(paletteHierarchy));
+    check('palette hierarchy: gradient/mixed controllers and empty palettes use Other lights', paletteHierarchy?.gradientInOther && paletteHierarchy?.mixedControllerInOther && paletteHierarchy?.emptyPaletteEditable, JSON.stringify(paletteHierarchy));
+    check('palette hierarchy: nested editing keeps automatic assignment and reset preserves pins', paletteHierarchy?.openingUnchanged && paletteHierarchy?.nestedEditable && paletteHierarchy?.automaticUnpinned && paletteHierarchy?.resetPreservesPin, JSON.stringify(paletteHierarchy));
+
     // 5. WLED controller clustering (post-R5 visual polish): the 6
     //    wled_seg_* fixtures collapse into one <ss-fixture-cluster>, and a
     //    segment inside it is still individually selectable/inspectable by
@@ -1611,21 +1738,19 @@ async function main() {
       const previewInvalidated = store.state.builder.preview === null && store.state.builder.previewStale === true;
       const staleHintShown = !!broot().querySelector("#builder-preview-stale");
       const oldPanelGone = !broot().querySelector("#builder-preview-panel #builder-preview-head");
-      // Per-fixture override (§3): add one, edit a supported field.
-      const addSelect = broot().querySelector("#builder-override-add");
-      if (!addSelect) return { fail: "override picker missing" };
-      const overrideFixture = [...addSelect.options].map((o) => o.value).filter(Boolean)[0];
-      if (!overrideFixture) return { fail: "no fixture available to override" };
-      addSelect.value = overrideFixture;
-      addSelect.dispatchEvent(new Event("change", { bubbles: true }));
-      await waitFor(() => !!(store.state.builder.draft.fixture_states || {})[overrideFixture]);
-      const overrideRoot = () => broot().querySelector(".override[data-fixture='" + overrideFixture + "']");
-      overrideRoot().querySelector("summary").click();
+      // Customize the fixture only through its Palette membership.
+      const overrideFixture = 'lamp';
+      const lampDetailsChip = await openColorContaining(".builder-assign-chip[data-fixture='lamp']");
+      if (!lampDetailsChip) return { fail: 'nested lamp entry missing' };
+      lampDetailsChip.click();
+      const overrideRoot = () => broot().querySelector(".palette-fixture[data-fixture-entry='lamp']");
+      await waitFor(() => overrideRoot()?.querySelector('.fixture-details'));
       const ovOn = overrideRoot().querySelector(".state-on");
       ovOn.value = "off";
       ovOn.dispatchEvent(new Event("change", { bubbles: true }));
       await waitFor(() => store.state.builder.draft.fixture_states[overrideFixture].on === false);
-      overrideRoot().querySelector(".state-brightness-num").value = "";
+      overrideRoot().querySelector('.builder-state-set-brightness').click();
+      await waitFor(() => !overrideRoot().querySelector('.state-brightness-num').disabled);
       setNativeValue(overrideRoot().querySelector(".state-brightness-num"), "33");
       await waitFor(() => store.state.builder.draft.fixture_states[overrideFixture].brightness === 33);
       // re-preview produces current server-authoritative results again
@@ -1968,9 +2093,10 @@ async function main() {
         : null;
       const saveLabel = (broot().querySelector("#builder-save") || {}).textContent || "";
       // Edit ONE supported field on an override that also carries advanced content.
-      const overrideEl = broot().querySelector(".override[data-fixture='g_strip']");
+      const overrideEl = broot().querySelector(".palette-fixture[data-fixture-entry='g_strip']");
       if (!overrideEl) return { fail: "g_strip override not rendered in the duplicate draft" };
-      overrideEl.querySelector("summary").click();
+      overrideEl.querySelector('.builder-assign-chip').click();
+      await waitFor(() => overrideEl.querySelector('.fixture-details'));
       setNativeValue(overrideEl.querySelector(".state-brightness-num"), "37");
       await waitFor(() => store.state.builder.draft.fixture_states.g_strip.brightness === 37);
       const gradientAfter = store.state.builder.draft.fixture_states.g_strip.gradient || null;
@@ -2072,14 +2198,14 @@ async function main() {
       lamp.checked = true;
       lamp.dispatchEvent(new Event("change", { bubbles: true }));
       await waitFor(() => store.state.builder.draft.target_ids.includes("lamp"));
-      const orphanRoot = await waitFor(() => broot().querySelector("#builder-orphan-overrides"));
+      const orphanRoot = await waitFor(() => broot().querySelector("#builder-unresolved-state"));
       const buttons = orphanRoot ? [...orphanRoot.querySelectorAll(".builder-orphan-remove")] : [];
       const orphanIds = buttons.map((b) => b.dataset.fixture);
       const gstrip = buttons.find((b) => b.dataset.fixture === "g_strip");
       const actionLabel = gstrip ? (gstrip.getAttribute("aria-label") || "").length > 0 : false;
       if (gstrip) gstrip.click();
       const removed = await waitFor(() => !(store.state.builder.draft.fixture_states || {}).g_strip);
-      const orphanCountAfter = broot().querySelectorAll("#builder-orphan-overrides .builder-orphan-remove").length;
+      const orphanCountAfter = broot().querySelectorAll("#builder-unresolved-state .builder-orphan-remove").length;
       const savedNameUnchanged = (store.state.scenes.scenes.find((s) => s.id === "twilight") || {}).name;
       store.closeBuilder();
       await store.setView("scenes");
@@ -2620,6 +2746,14 @@ async function main() {
         const broot = () => dom(root().querySelector("ss-view-scene-builder"));
         await waitFor(() => broot() && broot().querySelector("#builder-save"));
         await new Promise((r) => setTimeout(r, 60));
+        // Include the nested editor in narrow-screen checks, not just collapsed rows.
+        for (const usage of broot().querySelectorAll('.paint-use')) {
+          usage.click();
+          await new Promise((r) => setTimeout(r, 60));
+          const fixture = broot().querySelector('.palette-row-fixtures .palette-fixture .builder-assign-chip');
+          if (fixture) { fixture.click(); break; }
+        }
+        await new Promise((r) => setTimeout(r, 60));
         const builderOverflow = overflow();
         const visible = (el) => {
           if (!el) return false;
@@ -2640,7 +2774,8 @@ async function main() {
           cancel: visible(broot().querySelector("#builder-cancel")),
           targets: broot().querySelectorAll("input.builder-target").length,
           defaults: visible(broot().querySelector("#builder-default-brightness-num")),
-          overrides: visible(broot().querySelector("#builder-overrides")),
+          palette: visible(broot().querySelector("#builder-palette")),
+          legacyAbsent: !broot().querySelector('#builder-overrides, #builder-override-add'),
           palettePreview: !!broot().querySelector("#builder-palette-preview"),
           unnamedButtons: unnamed,
         };
@@ -2668,7 +2803,7 @@ async function main() {
           r.cancel === true &&
           r.targets > 0 &&
           r.defaults === true &&
-          r.overrides === true &&
+          r.palette === true && r.legacyAbsent === true &&
           r.palettePreview === true,
         JSON.stringify(r)
       );

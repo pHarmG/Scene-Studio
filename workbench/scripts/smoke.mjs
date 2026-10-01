@@ -2297,10 +2297,10 @@ async function main() {
     );
 
     stateStore.patchBuilderDefaultState({ on: true, brightness: 55, color: "#abcdef" });
-    stateStore.addBuilderOverride("g_strip");
+    stateStore.patchBuilderOverride("g_strip", { brightness: 55 });
     check(
-      "builder §3: an added override inherits the scene defaults as its starting point",
-      deepEqual(stateStore.state.builder.draft.fixture_states.g_strip, { on: true, brightness: 55, color: "#abcdef" }),
+      "builder: customizing a field writes only that field, without a color/palette pin",
+      deepEqual(stateStore.state.builder.draft.fixture_states.g_strip, { brightness: 55 }),
       JSON.stringify(stateStore.state.builder.draft.fixture_states.g_strip)
     );
     stateStore.patchBuilderOverride("g_strip", { brightness: 33, color: null, on: false });
@@ -2314,6 +2314,17 @@ async function main() {
       "builder §3: removing an override is explicit and returns the fixture to the defaults",
       stateStore.state.builder.draft.fixture_states.g_strip === undefined
     );
+    stateStore.patchBuilderOverride('g_strip', { palette_index: 2, brightness: 37, gradient: ['#123456', '#abcdef'], effect: 'sparkle', provider_ext: { hue_v2: { sample: true } } });
+    stateStore.resetBuilderFixtureDetails('g_strip');
+    check('palette details: reset retains an independent palette pin', deepEqual(stateStore.state.builder.draft.fixture_states.g_strip, { palette_index: 2 }));
+    stateStore.patchBuilderOverride('g_strip', { color: '#123456', brightness: 25 });
+    stateStore.resetBuilderFixtureDetails('g_strip');
+    check('palette details: reset retains an explicit custom color', deepEqual(stateStore.state.builder.draft.fixture_states.g_strip, { color: '#123456' }));
+    stateStore.removeBuilderOverride('g_strip');
+    stateStore.patchBuilderOverride('g_strip', { brightness: 40 });
+    check('palette details: unrelated customization does not create a palette pin', stateStore.state.builder.draft.fixture_states.g_strip.palette_index === undefined && stateStore.state.builder.draft.fixture_states.g_strip.color === undefined);
+    stateStore.resetBuilderFixtureDetails('g_strip');
+    check('palette details: resetting automatic customization returns to no explicit state', stateStore.state.builder.draft.fixture_states.g_strip === undefined);
 
     // §3 — advanced fields survive a supported-field edit (real advanced doc).
     const advStore = createStore(createMockSceneStudioClient(baseData, { scenarioId: "all-healthy" }));
@@ -2672,6 +2683,78 @@ async function main() {
   updateClient.checkUpdates = async () => { throw new Error('synthetic-private-access-marker'); };
   await updateStore.checkUpdates();
   check('updates: failure does not leak exception detail', updateStore.state.updateCheck.state === 'error' && !JSON.stringify(updateStore.state.updateCheck).includes('synthetic-private-access-marker'));
+
+  const { followUpdate, updateReloadUrl } = await import('../src/update_execution.js');
+  const oldStatic = {version:'0.1.0',source_sha:'old',source_tree_sha256:'old-tree'};
+  const newStatic = {version:'0.1.1',source_sha:'new',source_tree_sha256:'new-tree'};
+  const updated = {conn:{mode:'live',url:''},status:{engine:{ok:true},product:{build:newStatic}},
+    updateExecution:{state:'succeeded',target_version:'0.1.1'}};
+  const page = 'http://runtime.example.test/scene_studio/?keep=yes#scene';
+  const reload = updateReloadUrl(updated, oldStatic, page);
+  check('updates: verified success reloads the new static bundle with a fresh URL',
+    reload?.includes('_scene_studio_build=0.1.1-new-tree') && reload.includes('keep=yes') && reload.endsWith('#scene'));
+  check('updates: new bundle and an already-attempted reload do not loop',
+    updateReloadUrl(updated, newStatic, page) === null && updateReloadUrl(updated, oldStatic, reload) === null);
+  check('updates: dirty drafts defer static reload',
+    updateReloadUrl({...updated,builder:{dirty:true}}, oldStatic, page) === null);
+  check('updates: local mock/remote developer pages never reload from a live update',
+    updateReloadUrl({...updated,conn:{mode:'mock'}}, oldStatic, page) === null &&
+    updateReloadUrl({...updated,conn:{mode:'live',url:'http://other.example.test'}}, oldStatic, page) === null);
+  check('updates: rollback and unverified new identity never reload static files',
+    updateReloadUrl({...updated,updateExecution:{state:'failed',rolled_back:true}}, oldStatic, page) === null &&
+    updateReloadUrl({...updated,status:{engine:{ok:true},product:{build:oldStatic}}}, oldStatic, page) === null);
+  let tick = 0;
+  const fast = { timeout: 20, interval: 1, now: () => tick, sleep: async () => { tick++; } };
+  let phases = ['downloading', 'verifying', 'activating', 'restarting', 'disconnect', 'verifying_new_build', 'succeeded'];
+  const progress = [];
+  const execution = {
+    getUpdateStatus: async () => {
+      const state = phases.shift() || 'succeeded';
+      if (state === 'disconnect') throw new Error('synthetic-private-access-marker');
+      return { state, target_version: '0.1.1', installed_version: '0.1.0' };
+    },
+    getStatus: async () => ({ engine: { ok: true }, product: { build: { version: '0.1.1' } } }),
+  };
+  await followUpdate(execution, '0.1.1', s => progress.push(s), fast);
+  check('updates: disconnect is reconnecting progress followed by exact NEW build success',
+    progress.some(s => s.state === 'reconnecting') && progress.at(-1).state === 'succeeded' && !JSON.stringify(progress).includes('synthetic-private-access-marker'));
+  execution.getStatus = async () => ({ engine: { ok: true }, product: { build: { version: '0.1.0' } } });
+  const rolled = [];
+  await followUpdate(execution, '0.1.1', s => rolled.push(s), fast);
+  check('updates: healthy OLD build is rollback, never success', rolled.at(-1).rolled_back === true && rolled.at(-1).state === 'failed');
+  execution.getStatus = async () => ({ engine: { ok: false }, product: { build: { version: '0.1.1' } } });
+  const timed = [];
+  await followUpdate(execution, '0.1.1', s => timed.push(s), fast);
+  check('updates: unhealthy NEW build times out with explicit recovery state', timed.at(-1).recovery_required && timed.at(-1).message.includes('timed out'));
+
+  let starts = 0, resolveStart;
+  updateClient.startUpdate = target => { starts++; check('updates: browser sends only target identity', target === '0.1.1'); return new Promise(resolve => { resolveStart = resolve; }); };
+  updateClient.getUpdateStatus = async () => ({ state: 'failed', rolled_back: true, message: 'Previous build restored.' });
+  updateStore.state.updateCheck = { state: 'available', latest_version: '0.1.1' };
+  updateStore.reviewUpdate();
+  check('updates: review shows installed/target and causes no execution', starts === 0 && updateStore.state.updateConfirmation.target === '0.1.1');
+  const applying = updateStore.confirmUpdate();
+  await updateStore.confirmUpdate();
+  check('updates: repeated confirmation starts exactly one transaction', starts === 1);
+  resolveStart({ state: 'restarting', target_version: '0.1.1' });
+  await applying;
+  check('updates: server rollback is preserved by store', updateStore.state.updateExecution.rolled_back === true);
+
+  const savedFetch = globalThis.fetch;
+  const updateWire = [];
+  try {
+    globalThis.fetch = async (url, options) => {
+      updateWire.push({url, body: JSON.parse(options.body)});
+      return { ok: true, json: async () => ({ status: 202, body: {state:'downloading'} }) };
+    };
+    const adminClient = createHttpSceneStudioClient('http://runtime.example.test', {transport:'appdaemon'});
+    await adminClient.startUpdate('0.1.1');
+    check('updates: administration uses independent endpoint and version-only RPC body', updateWire[0].url.endsWith('/api/appdaemon/scene_studio_update_api') && JSON.stringify(updateWire[0].body) === JSON.stringify({method:'POST',path:'/update',body:{target_version:'0.1.1'}}));
+    globalThis.fetch = async () => ({ok:false, status:404, json: async () => { throw new Error('synthetic-private-access-marker'); }});
+    let missingExecutor;
+    try { await adminClient.startUpdate('0.1.1'); } catch (error) { missingExecutor = error; }
+    check('updates: missing companion is actionable rejection, without parsing upstream HTML/secrets', missingExecutor?.rejected && missingExecutor.message.includes('companion') && !missingExecutor.message.includes('private-access-marker'));
+  } finally { globalThis.fetch = savedFetch; }
 
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
