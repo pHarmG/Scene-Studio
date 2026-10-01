@@ -1,7 +1,7 @@
 {
   "name": "scene-studio-workbench",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Scene Studio Workbench - standalone exception-driven management UI running against a mock client (no HA dependency).",
   "scripts": {

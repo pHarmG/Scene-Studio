@@ -1,8 +1,8 @@
 # Palette release update validation
 
 The sentinel pair is **v0.1.0** (independent update companion and the old
-Overrides editor) → **v0.1.1** (Palette as the sole fixture-look editor).
-The v0.1.1 release workflow consumes the published v0.1.0 ZIP and its checksum
+Overrides editor) → **v0.1.2** (Palette as the sole fixture-look editor).
+The v0.1.2 release workflow consumes the published v0.1.0 ZIP and its checksum
 and exercises the production transaction engine with both actual product
 trees in a temporary installation. It checks the compiled UI sentinel,
 failed-activation rollback, reconnect, build identity and preserved data.
@@ -33,13 +33,13 @@ See [the update architecture](IN_APP_UPDATES.md).
 
 1. Open the baseline Workbench; System → Product must show **0.1.0**.
 2. Open System → Update and click **Check for updates**.
-3. Confirm **0.1.1**, tag **v0.1.1**, is offered.
-4. Click **Update** and explicitly confirm **0.1.0 → 0.1.1**.
+3. Confirm **0.1.2**, tag **v0.1.2**, is offered.
+4. Click **Update** and explicitly confirm **0.1.0 → 0.1.2**.
 5. Observe download, verification, backup, staging, activation and reconnect.
    AppDaemon restarts once; a temporary disconnect is expected progress.
-6. Reload the page once, then confirm **0.1.1** and the release source SHA in
+6. Reload the page once, then confirm **0.1.2** and the release source SHA in
    System → Product. The original published v0.1.0 reconnects its API but keeps
-   its running JavaScript; v0.1.1 adds automatic static reload for future updates
+   its running JavaScript; v0.1.2 adds automatic static reload for future updates
    and defers that reload while a scene draft has unsaved changes.
 7. Edit a scene: expand a Palette row, then one assigned fixture's details.
    Exceptional fixtures/controllers are under Other lights. There is no

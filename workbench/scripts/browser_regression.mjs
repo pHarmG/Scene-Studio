@@ -676,7 +676,9 @@ async function main() {
       if (!pinned) return { fail: 'pinned nested entry missing' };
       if (!pinned.querySelector('.fixture-details')) { pinned.querySelector('.builder-assign-chip').click(); await tick(); }
       pinned.querySelector('.builder-fixture-reset').click(); await tick();
-      const resetPreservesPin = JSON.stringify(store.state.builder.draft.fixture_states.lamp) === JSON.stringify({ palette_index: 1 });
+      const summaryAfterReset = br().querySelector('[data-fixture-entry="lamp"] .assign-summary').textContent;
+      const resetPreservesPin = JSON.stringify(store.state.builder.draft.fixture_states.lamp) === JSON.stringify({ palette_index: 1 }) &&
+        summaryAfterReset.includes('palette #2') && !summaryAfterReset.includes('55%') && !summaryAfterReset.includes('65%');
       const ids = [...br().querySelectorAll('#builder-palette .palette-fixture')].map(el => el.dataset.fixtureEntry);
       const noDuplicates = new Set(ids).size === ids.length;
       store.patchBuilderDraft({ palette: [] }); await tick();

@@ -1985,12 +1985,11 @@ export class SsViewSceneBuilder extends SsLightElement {
     const currentHex = /^#[0-9a-f]{6}$/i.test(assignment.color || "") ? assignment.color : "#ffffff";
     const selectedIndex = !mixed && assignment.pinned ? assignment.index : null;
     const autoSelected = !mixed && mode === "auto";
-    const state = draft.fixture_states?.[fixture.id] || {};
-    const effective = { ...(draft.default_state || {}), ...state };
+    const effective = draft.fixture_states?.[fixture.id] || draft.default_state || {};
     const assignmentSummary = assignment.index != null ? `palette #${assignment.index + 1}${assignment.pinned ? "" : " · automatic"}`
-      : assignment.custom ? "custom color" : "Scene Defaults";
+      : assignment.custom ? "custom color" : "no palette assignment";
     const summary = fold ? (mixed ? "Mixed segment assignments" : assignmentSummary)
-      : [this.#stateSummary({ ...effective, color: undefined, palette_index: undefined }), assignmentSummary].join(" · ");
+      : [this.#stateSummary({ ...effective, color: undefined, palette_index: undefined }), assignmentSummary].filter(Boolean).join(" · ");
     return html`
       <div class="palette-fixture" data-fixture-entry=${assignKey}>
       <div class="assign-row ${open ? "open" : ""}" data-fixture=${assignKey} data-mode=${mode}>
@@ -2086,10 +2085,10 @@ export class SsViewSceneBuilder extends SsLightElement {
     const advanced = describeFixtureState(state).advanced;
     const customized = Object.keys(state).some(key => key !== "palette_index" && key !== "color");
     return html`<div class="fixture-details" data-fixture-details=${fixture.id}>
-      <p class="hint">Unset fields inherit Scene Defaults. Color assignment changes only when you choose a color.</p>
+      <p class="hint">With no individual state, this light uses Scene Defaults. In an individual look, unset fields leave those settings unchanged. Clearing extra details keeps the color assignment.</p>
       ${advanced.length ? html`<p class="hint">Includes ${advanced.join(", ")}. Editing one field preserves the others.</p>` : ""}
       ${this.#renderStateFields(fixture.id, state, { idPrefix: `builder-fixture-${fixture.id}` })}
-      ${customized ? html`<button class="row-btn builder-fixture-reset" @click=${() => this.store.resetBuilderFixtureDetails(fixture.id)}>Use Scene Defaults for details</button>` : ""}
+      ${customized ? html`<button class="row-btn builder-fixture-reset" @click=${() => this.store.resetBuilderFixtureDetails(fixture.id)}>Clear extra details</button>` : ""}
     </div>`;
   }
 
@@ -2236,7 +2235,7 @@ export class SsViewSceneBuilder extends SsLightElement {
       <div class="look-power">
         <span class="look-k">Power</span>
         <select class="state-on" data-scope=${scope} data-field="on" aria-label="On or off">
-          <option value="" ?selected=${onValue === ""}>${scope === "default" ? "not set" : "Scene Defaults"}</option>
+          <option value="" ?selected=${onValue === ""}>${scope === "default" ? "not set" : Object.keys(state).length ? "Leave unchanged" : "Scene Defaults"}</option>
           <option value="on" ?selected=${onValue === "on"}>On</option>
           <option value="off" ?selected=${onValue === "off"}>Off</option>
         </select>
@@ -2671,7 +2670,7 @@ export class SsViewSceneBuilder extends SsLightElement {
           <span class="count">${resolved.length || 0} lights</span>
         </div>
         <p class="hint">
-          Shared look. Unset fixture details inherit these Scene Defaults.
+          Shared look for lights without individual state.
         </p>
         ${this.#renderStateFields("default", defaults, {
           idPrefix: "builder-default",
