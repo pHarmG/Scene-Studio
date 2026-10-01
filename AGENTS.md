@@ -37,6 +37,13 @@ Scene Studio implementation in Home-Tech.
 - **Installer** (`installer/`): the only code that writes to a target
   Home Assistant/AppDaemon host. Deployers keep backup → stage → hash-verify
   → activate → health-check → rollback semantics; do not bypass them.
+- **Runtime update supervisor** (`installer/runtime/`): provisioned by the
+  guided installer as an independent AppDaemon app outside the replaceable
+  backend. Workbench confirmation authorizes only the exact requested release.
+  It replaces only backend/Workbench product trees, journals recovery outside
+  them, and resumes after add-on restart even if the backend fails to import.
+  Normal updates never replace the supervisor or edit configuration. See
+  `docs/installation/IN_APP_UPDATES.md`.
 - **Installer UI** (`installer/ui/`): a local, cross-platform browser front-end
   for the guided wizard (Python stdlib server + static SPA, loopback-only,
   session-token protected). It implements the wizard's read-only probes 1:1
@@ -81,7 +88,9 @@ required for Scene Studio; absent private access means unavailable, never curren
 Tokens stay in process environments and must never enter assets, responses,
 logs, profiles, diagnostics, or support ZIPs. Workbench links to the signed-in
 Release page for intentional downloads; checking/downloading is distinct from
-applying. Every live apply still requires the exact approved installer change.
+applying. In-app Update requires explicit installed/target-version confirmation
+and the independently provisioned recovery companion. Agent-run live applies
+still require approval of the exact installer change.
 
 ```powershell
 # backend tests (from backend/ or repo root)

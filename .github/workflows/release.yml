@@ -72,6 +72,6 @@ jobs:
 
           Alternatively download Get-SceneStudio.ps1 and run it with PowerShell 7. It retrieves and verifies the complete payload before opening the same guided installer. Private repository access requires signing in for manual downloads or an optional SCENE_STUDIO_GITHUB_TOKEN with Contents read permission for the bootstrap.
 
-          The ZIP is the complete product. GitHub source-code archives are for developers. Workbench update checks and downloads never install automatically.
+          The ZIP is the complete product. GitHub source-code archives are for developers. The guided installer provisions the independent recovery companion; Workbench Update requires explicit version confirmation. Update checks never install automatically.
           '@ | ForEach-Object { $_ -replace '<version>', $version } | Set-Content -LiteralPath dist/release-notes.md
           gh release create "v$version" "dist/Scene-Studio-v$version.zip" dist/SHA256SUMS.txt dist/Get-SceneStudio.ps1 --verify-tag --title "Scene Studio v$version" --notes-file dist/release-notes.md --generate-notes

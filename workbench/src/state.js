@@ -15,6 +15,7 @@
  */
 
 import { createHttpSceneStudioClient } from "./api.js";
+import { followUpdate, updateRunning } from "./update_execution.js";
 import { canonicalizeStaticPalette } from "./palette_assign.js";
 import { normalizePlayback, sessionById } from "./playback.js";
 
@@ -281,6 +282,8 @@ export function createStore(client) {
     selection: null, // WorkbenchSelection | null
     status: null,
     updateCheck: null,
+    updateConfirmation: null,
+    updateExecution: null,
     fixtures: null, // registry doc with derived health
     scenes: null, // scenes doc
     discovery: null, // discovery report | null (live: none until discovery.run)
@@ -549,6 +552,50 @@ export function createStore(client) {
       if (source === active) { state.updateCheck = result; notify(); }
     },
 
+    reviewUpdate() {
+      if (state.updateCheck?.state !== "available" || updateRunning(state.updateExecution) || state.updateExecution?.recovery_required) return;
+      state.updateConfirmation = { installed: state.status?.product?.build?.version || "unknown", target: state.updateCheck.latest_version };
+      notify();
+    },
+    cancelUpdate() { state.updateConfirmation = null; notify(); },
+    async confirmUpdate() {
+      if (!state.updateConfirmation || updateRunning(state.updateExecution)) return;
+      const source = active;
+      const target = state.updateConfirmation.target;
+      state.updateConfirmation = null;
+      const changed = (result) => { if (source === active) { state.updateExecution = result; notify(); } };
+      changed({ state: "downloading", target_version: target, message: "Requesting update…" });
+      if (!source.startUpdate) return changed({ state: "failed", message: "Updates require a live installation with the update companion." });
+      try {
+        const status = await source.startUpdate(target);
+        changed(status.state === "succeeded" ? { ...status, state: "verifying_new_build" } : status);
+      }
+      catch (error) {
+        if (error.rejected) return changed({ state: "failed", message: error.message });
+        changed({ state: "reconnecting", target_version: target, message: "Reconnecting to the update executor…" });
+      }
+      await followUpdate(source, target, changed);
+      if (source === active && state.updateExecution?.state === "succeeded") {
+        state.updateCheck = null;
+        await refresh();
+      }
+    },
+    async inspectUpdate() {
+      if (!active.getUpdateStatus || updateRunning(state.updateExecution)) return;
+      const source = active;
+      try {
+        const status = await source.getUpdateStatus();
+        if (source !== active) return;
+        state.updateExecution = status.state === "succeeded" ? { ...status, state: "verifying_new_build" } : status;
+        notify();
+        if (updateRunning(status) || status.state === "succeeded") {
+          await followUpdate(source, status.target_version, (result) => {
+            if (source === active) { state.updateExecution = result; notify(); }
+          });
+        }
+      } catch { /* Older installs expose discovery; applying explains the prerequisite. */ }
+    },
+
     /** @param {(state: object) => void} fn */
     subscribe(fn) {
       subscribers.add(fn);
@@ -557,6 +604,7 @@ export function createStore(client) {
 
     async init() {
       await refresh();
+      void this.inspectUpdate();
     },
 
     async setView(view) {
@@ -957,7 +1005,10 @@ export function createStore(client) {
      * @returns {Promise<boolean>}
      */
     async setConnection({ mode, url } = {}) {
+      if (updateRunning(state.updateExecution)) return false;
       state.updateCheck = null;
+      state.updateConfirmation = null;
+      state.updateExecution = null;
       if (mode === "live") {
         // An explicit empty URL is valid (same-origin AppDaemon transport);
         // only fall back when the caller omitted url entirely.

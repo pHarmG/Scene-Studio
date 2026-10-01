@@ -320,6 +320,13 @@ if (-not $SkipWorkbench) {
     }
 }
 
+if (-not $SkipBackend -and -not $SkipWorkbench) {
+    $updaterArgs = @($deployerArgs + '-Apply')
+    if ($SshPort -gt 0) { $updaterArgs += @('-SshPort', [string]$SshPort) }
+    & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'deploy_scene_studio_updater.ps1') @updaterArgs
+    if ($LASTEXITCODE -ne 0) { throw 'Independent update supervisor provisioning failed.' }
+}
+
 Write-Host ''
 Write-Host '== Install complete =='
 Write-Host "  1. Confirm the apps.yaml scene_studio block from step 6 is merged and AppDaemon restarted."

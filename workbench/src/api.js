@@ -2103,6 +2103,34 @@ export function createHttpSceneStudioClient(baseUrl, options = {}) {
   if (!endpointName) throw new Error("createHttpSceneStudioClient: endpointName is required in appdaemon transport");
   const adUrl = `${base}/api/appdaemon/${endpointName}`;
 
+  const updateRequest = async (method, path, body) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    try {
+      const res = await fetch(transport === "appdaemon" ? `${base}/api/appdaemon/scene_studio_update_api` : `${base}/api/scene_studio${path}`, {
+        method: transport === "appdaemon" ? "POST" : method,
+        signal: controller.signal,
+        headers: { "Content-Type": "application/json" },
+        ...(transport === "appdaemon" ? { body: JSON.stringify({ method, path, ...(body ? { body } : {}) }) }
+          : body ? { body: JSON.stringify(body) } : {}),
+      });
+      if (!res.ok) {
+        const error = new Error("Update executor unavailable. Provision the independent companion through the guided installer before applying updates.");
+        error.rejected = true;
+        throw error;
+      }
+      const envelope = await res.json();
+      const code = transport === "appdaemon" ? envelope.status : res.status;
+      const payload = transport === "appdaemon" ? envelope.body : envelope;
+      if (!res.ok || ![200, 202].includes(code)) {
+        const error = new Error("Update request rejected. Verify the update companion is installed and inspect System status.");
+        error.rejected = true;
+        throw error;
+      }
+      return payload;
+    } finally { clearTimeout(timer); }
+  };
+
   const fail = (what, err) =>
     new Error(`live connection failed (${what}): ${err && err.message ? err.message : String(err)}`);
 
@@ -2126,6 +2154,7 @@ export function createHttpSceneStudioClient(baseUrl, options = {}) {
       try {
         res = await fetch(adUrl, {
           method: "POST",
+          signal: AbortSignal.timeout(10000),
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(envelope),
         });
@@ -2162,10 +2191,11 @@ export function createHttpSceneStudioClient(baseUrl, options = {}) {
       res = await fetch(url, body !== undefined
         ? {
             method: "POST",
+            signal: AbortSignal.timeout(10000),
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
           }
-        : { method });
+        : { method, signal: AbortSignal.timeout(10000) });
     } catch (err) {
       throw fail(`${method} ${url}`, err);
     }
@@ -2220,6 +2250,9 @@ export function createHttpSceneStudioClient(baseUrl, options = {}) {
       const status = await readJson("/api/scene_studio/status", { check_updates: "true" });
       return status.product?.update || { state: "unavailable", message: "This backend does not support update checks." };
     },
+    startUpdate(target_version) { return updateRequest("POST", "/update", { target_version }); },
+    getUpdateStatus() { return updateRequest("GET", "/update/status"); },
+    getUpdateBuild() { return readJson("/api/scene_studio/status"); },
 
     async getFixtures() {
       return withDerivedHealth(await readJson("/api/scene_studio/fixtures"));

@@ -954,6 +954,8 @@ try {
     Write-Host "    AppDaemon (ssh):           $ResolvedSshDestination port $ResolvedSshPort"
     Write-Host "    Scene Studio HTTP:         $AppDaemonHttp"
     Write-Host "    AppDaemon config:          $AddonRoot"
+    Write-Host '    In-app update executor:    apps/scene_studio_update_supervisor.py + apps/scene_studio_release.py'
+    Write-Host '    Restart effect:            AppDaemon add-on only; companion resumes recovery after restart'
     Write-Host "    Scene Studio data:         $StoreRoot"
     Write-Host "    Deployment type:           $(if ($IsUpgrade) { 'upgrade of the existing install' } else { 'FRESH install' })"
     Write-Host "    Runtime mode:              $RuntimeMode$(if ($RuntimeMode -eq 'registry_admin') { '  (provider writes blocked until you deliberately enable them)' })"

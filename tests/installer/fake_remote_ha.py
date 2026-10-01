@@ -243,8 +243,14 @@ class FakeHost:
             dst.parent.mkdir(parents=True, exist_ok=True)
             src.rename(dst)
             return 0, ""
-        if command.startswith("chown -R "):
+        if command.startswith(("chown ", "chmod ")):
             return 0, ""  # ownership is implicit in the fake fs
+        if command.startswith("touch "):
+            self.resolve(shlex.split(command)[1]).touch()
+            return 0, ""
+        if command.startswith("cmp "):
+            words = shlex.split(command)
+            return (0, "") if self.resolve(words[1]).read_bytes() == self.resolve(words[2]).read_bytes() else (1, "")
         if command.startswith("rm -f "):
             parts = shlex.split(command)[1:]
             target = self.resolve(parts[0])
@@ -372,13 +378,15 @@ class FakeHost:
         if words and words[0] == "!":
             negate = True
             words = words[1:]
-        if len(words) != 2 or words[0] not in ("-d", "-f", "-e"):
+        if len(words) != 2 or words[0] not in ("-d", "-f", "-e", "-L"):
             raise CommandError(2, f"fake-ssh: unsupported test: {command}")
         target = self.resolve(words[1])
         if words[0] == "-d":
             result = target.is_dir()
         elif words[0] == "-f":
             result = target.is_file()
+        elif words[0] == "-L":
+            result = target.is_symlink()
         else:
             result = target.exists()
         if negate:
@@ -406,6 +414,12 @@ class FakeHost:
         return 0, "\n".join(results)
 
     def cmd_curl(self, command: str) -> tuple[int, str]:
+        if "scene_studio_update_api" in command:
+            configs = self.resolve("/addon_configs")
+            for candidate in configs.iterdir():
+                if all((candidate / "apps" / name).is_file() for name in ("scene_studio_update_supervisor.py", "scene_studio_release.py")):
+                    return 0, json.dumps({"status": 200, "body": {"state": "idle"}})
+            raise CommandError(7, "")
         # The only curl target in this vocabulary is the Scene Studio API.
         runtime = self.api_state()
         if runtime is None:

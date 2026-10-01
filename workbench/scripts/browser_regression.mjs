@@ -536,7 +536,7 @@ async function main() {
         const section = root().querySelector('.update-section');
         updateStates.push(section.querySelector('.update-state')?.textContent === label &&
           section.querySelector('button').disabled === (state === 'checking') &&
-          (state !== 'available' || section.textContent.includes('Release notes and download')));
+          (state !== 'available' || section.textContent.includes('Release notes')));
       }
       app().store.state.updateCheck = null;
       app().requestUpdate();
@@ -562,6 +562,35 @@ async function main() {
     );
     check('product: canonical version and exact build render in shell/System', shell?.versionRenders && shell?.identityRenders, JSON.stringify(shell));
     check('updates: all states render and explicit Check action works', shell?.updateStates?.every(Boolean) && shell?.checkAction, JSON.stringify(shell));
+    const updateExecution = await evaluate(`(async () => {
+      const app = document.querySelector('ss-app');
+      const root = app;
+      root.querySelector('.icon-btn[title^="System"]').click();
+      await app.updateComplete;
+      app.store.state.updateCheck = { state: 'available', latest_version: '0.1.1', release_url: 'https://github.com/pHarmG/Scene-Studio/releases/tag/v0.1.1' };
+      app.requestUpdate(); await app.updateComplete;
+      const available = !!root.querySelector('.update-apply');
+      root.querySelector('.update-apply').click(); await app.updateComplete;
+      const dialog = root.querySelector('.update-confirmation');
+      const confirmation = dialog?.textContent.includes('Installed: v') && dialog?.textContent.includes('Target: v0.1.1') && dialog?.textContent.includes('preserved') && !app.store.state.updateExecution;
+      root.querySelector('.update-confirm').click();
+      await new Promise(resolve => setTimeout(resolve, 50)); await app.updateComplete;
+      const mockRejected = app.store.state.updateExecution?.state === 'failed';
+      const stages = [];
+      for (const [state, label] of [['downloading','Downloading…'],['verifying','Verifying…'],['activating','Installing…'],['restarting','Restarting…'],['reconnecting','Waiting for Scene Studio…'],['verifying_new_build','Verifying update…'],['succeeded','Update complete'],['rollback','Rolling back…'],['failed','Update failed']]) {
+        app.store.state.updateExecution = { state, message: 'controlled executor fixture' };
+        app.requestUpdate(); await app.updateComplete;
+        stages.push(root.querySelector('.update-progress')?.textContent.includes(label));
+      }
+      app.store.state.updateExecution = {state:'failed',rolled_back:true,message:'Previous healthy build restored.'};
+      app.requestUpdate(); await app.updateComplete;
+      const rollback = root.querySelector('.update-progress')?.textContent.includes('Update rolled back');
+      app.store.state.updateCheck = null; app.store.state.updateExecution = null;
+      root.querySelector('ss-drawer[floating] .system-head .close').click();
+      await app.updateComplete;
+      return {available,confirmation,mockRejected,stages,rollback};
+    })()`);
+    check('updates: available, explicit confirmation, all execution phases and rollback render', updateExecution?.available && updateExecution?.confirmation && updateExecution?.mockRejected && updateExecution?.stages.every(Boolean) && updateExecution?.rollback, JSON.stringify(updateExecution));
     // 5. WLED controller clustering (post-R5 visual polish): the 6
     //    wled_seg_* fixtures collapse into one <ss-fixture-cluster>, and a
     //    segment inside it is still individually selectable/inspectable by

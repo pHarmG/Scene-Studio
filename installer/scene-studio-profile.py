@@ -346,6 +346,15 @@ def render_apps_yaml(profile):
             "write are blocked. When the registry is deliberately ready, set both "
             "'registry_admin: false' and 'read_only: false' (mode 'normal') and restart AppDaemon."
         )
+    lines.extend([
+        "", "scene_studio_update:",
+        "  module: scene_studio_update_supervisor",
+        "  class: SceneStudioUpdateSupervisor",
+        f"  addon_slug: {data['appdaemon_config_root'].rsplit('/', 1)[-1]}",
+        "  config_root: /config",
+        f"  store_root: {data['store_root']}",
+        "  api_url: http://127.0.0.1:5050",
+    ])
     return "\n".join(lines), notes
 
 

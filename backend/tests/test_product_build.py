@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def release(version="0.2.0", **extra):
-    return {"tag_name": "v" + version, "assets": [{"name": f"Scene-Studio-v{version}.zip"}, {"name": "SHA256SUMS.txt"}], **extra}
+    return {"tag_name": "v" + version, "assets": [{"id": 1, "name": f"Scene-Studio-v{version}.zip"}, {"id": 2, "name": "SHA256SUMS.txt"}], **extra}
 
 
 @pytest.mark.parametrize("installed,latest,state", [
