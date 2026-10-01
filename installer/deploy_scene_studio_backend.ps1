@@ -101,7 +101,7 @@ if (-not $env:HA_TOKEN -and $env:SCENE_STUDIO_HA_TOKEN) {
 }
 $env:HA_URL = $HaUrl
 $HaBase = $HaUrl.TrimEnd('/')
-$SourceRoot = Join-Path $RepoRoot 'backend\src\scene_studio'
+$SourceRoot = Join-Path (Join-Path (Join-Path $RepoRoot 'backend') 'src') 'scene_studio'
 $RemoteRoot = $AddonConfigRoot.TrimEnd('/')
 $RemoteTarget = "$RemoteRoot/apps/scene_studio"
 $AddonSlug = Split-Path $RemoteRoot -Leaf

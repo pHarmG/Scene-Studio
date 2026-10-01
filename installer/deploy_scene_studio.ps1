@@ -56,8 +56,10 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
 $BundleRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $ProfileTool = Join-Path $PSScriptRoot 'scene-studio-profile.py'
 $ManifestTool = Join-Path $PSScriptRoot 'verify_release_manifest.ps1'
-$BackendDeployer = Join-Path $BundleRoot 'installer\deploy_scene_studio_backend.ps1'
-$WorkbenchDeployer = Join-Path $BundleRoot 'installer\deploy_scene_studio_workbench.ps1'
+# nested Join-Path (never '\' inside a segment): the same join must also
+# resolve when this script runs under pwsh on macOS/Linux.
+$BackendDeployer = Join-Path (Join-Path $BundleRoot 'installer') 'deploy_scene_studio_backend.ps1'
+$WorkbenchDeployer = Join-Path (Join-Path $BundleRoot 'installer') 'deploy_scene_studio_workbench.ps1'
 $Manifest = Join-Path $BundleRoot 'MANIFEST.sha256'
 
 foreach ($required in @($ProfileTool, $ManifestTool, $BackendDeployer, $WorkbenchDeployer)) {

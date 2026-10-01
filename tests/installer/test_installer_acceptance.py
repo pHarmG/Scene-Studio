@@ -27,6 +27,7 @@ Wizard-level coverage lives in ``test_wizard_acceptance.py``.
 
 import json
 import os
+import shlex
 import shutil
 import socket
 import subprocess
@@ -113,6 +114,8 @@ class FakeHaApi:
 
 
 def _write_ssh_shim(shim_dir: Path) -> Path:
+    # Both shim spellings: ssh.cmd resolves on Windows, the extensionless
+    # `ssh` script on macOS/Linux — the same PATH prepend works on either OS.
     shim_dir.mkdir(parents=True, exist_ok=True)
     shim = shim_dir / "ssh.cmd"
     shim.write_text(
@@ -120,6 +123,13 @@ def _write_ssh_shim(shim_dir: Path) -> Path:
         f'python "{FAKE_SSH}" %*\r\n',
         encoding="utf-8",
     )
+    posix_shim = shim_dir / "ssh"
+    posix_shim.write_text(
+        "#!/bin/sh\n"
+        f'exec {shlex.quote(sys.executable)} {shlex.quote(str(FAKE_SSH))} "$@"\n',
+        encoding="utf-8",
+    )
+    posix_shim.chmod(0o755)
     return shim_dir
 
 

@@ -26,6 +26,8 @@ cd workbench && npm install && npm run build && npm run smoke && cd ..
 
 # guided install against your Home Assistant + AppDaemon host
 pwsh ./Install-SceneStudio.ps1
+# ...or the same guided installer with a browser UI (Python 3.9+, any OS):
+python installer/ui/server.py
 ```
 
 ## Install (non-developer)
@@ -34,6 +36,12 @@ Download `Scene-Studio-<version>.zip` from GitHub Releases, extract, and run:
 
 ```powershell
 pwsh ./Install-SceneStudio.ps1
+```
+
+or, for the same guided installer with a browser UI:
+
+```bash
+python installer/ui/server.py
 ```
 
 The wizard asks plain questions, probes everything read-only first, shows the

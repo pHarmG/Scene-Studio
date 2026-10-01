@@ -13,9 +13,10 @@ system **from your normal computer** — nothing is installed on your PC.
 2. **A working AppDaemon add-on** on Home Assistant (Settings > Add-ons >
    AppDaemon — installed and running at least once).
 3. **ssh access from this computer to Home Assistant** with a key
-   (no password prompt). One-time setup:
-   `ssh-keygen` then copy your key to the HA host
-   (`type %USERPROFILE%\.ssh\id_ed25519.pub | ssh root@homeassistant.local "cat >> ~/.ssh/authorized_keys"`).
+   (no password prompt). One-time setup: `ssh-keygen` then copy your key to
+   the HA host —
+   Windows: `type %USERPROFILE%\.ssh\id_ed25519.pub | ssh root@homeassistant.local "cat >> ~/.ssh/authorized_keys"`
+   macOS/Linux: `cat ~/.ssh/id_ed25519.pub | ssh root@homeassistant.local "cat >> ~/.ssh/authorized_keys"`.
 4. **A Home Assistant long-lived token:** in Home Assistant, click your
    profile name (bottom left) > Security > Long-lived access tokens > Create.
    The wizard asks you to paste it; it is used for this installation only and
@@ -41,6 +42,15 @@ Open PowerShell 7 **in this folder** and run:
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\Install-SceneStudio.ps1
 ```
+
+Prefer clicking to typing? Launch the browser wizard instead — same
+questions, same review, same installer underneath:
+
+```bash
+python installer/ui/server.py
+```
+
+(it opens your browser automatically; see [INSTALLER_UI.md](INSTALLER_UI.md)).
 
 The wizard asks roughly six questions — your Home Assistant address, the
 ssh target, which lighting sources to discover (Hue / WLED / HA lights), and

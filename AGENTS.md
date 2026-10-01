@@ -17,7 +17,7 @@ Scene Studio implementation in Home-Tech.
 | `backend/` | Python package (`src/scene_studio`), fixtures, full test suite. Stdlib-only core; the AppDaemon adapter lazily imports `requests` + AppDaemon. |
 | `workbench/` | Static authoring SPA (Vite + Lit). `npm run build|smoke|browser`. Mocks mirror `backend/fixtures/*.sample.json`. |
 | `home-assistant/scene-studio-card/` | Optional Lovelace card (`custom:scene-studio-card`; `test-bench-scene-controls-card` is a compatibility alias). Build: `npm run build`, tests: `npm test`. |
-| `installer/` | Guided wizard (`Install-SceneStudio.ps1`), internal installer, deployers, profile tool, manifest verifier. |
+| `installer/` | Guided wizard (`Install-SceneStudio.ps1`), browser wizard (`ui/server.py` + `ui/static/`), internal installer, deployers, profile tool, manifest verifier. |
 | `scripts/` | `build_release.py` (release ZIP packager), `security/scan_secrets.py` (secret scanner — run before every commit). |
 | `tests/` | Cross-cutting/installer acceptance support. |
 | `docs/` | `architecture/`, `development/`, `installation/`, `operations/`, `design/`. |
@@ -37,6 +37,14 @@ Scene Studio implementation in Home-Tech.
 - **Installer** (`installer/`): the only code that writes to a target
   Home Assistant/AppDaemon host. Deployers keep backup → stage → hash-verify
   → activate → health-check → rollback semantics; do not bypass them.
+- **Installer UI** (`installer/ui/`): a local, cross-platform browser front-end
+  for the guided wizard (Python stdlib server + static SPA, loopback-only,
+  session-token protected). It implements the wizard's read-only probes 1:1
+  for structured display but performs NO installation logic itself: apply
+  spawns `Install-SceneStudio.ps1 -Unattended -Answers` so review, backups,
+  rollback, and support-report semantics stay in the wizard. Secrets (HA
+  token, Hue key) live in the server process memory or environment
+  variables only — never in files, logs, or API responses.
 
 ## Standard commands
 
@@ -49,6 +57,12 @@ npm install && npm run smoke && npm run build && npm run browser
 
 # HA card (from home-assistant/scene-studio-card/)
 npm install && npm run build && npm run typecheck && npm test
+
+# installer UI acceptance tests (from repo root)
+python -m pytest tests/installer/test_installer_ui.py -q
+
+# installer UI (browser wizard; from repo root or release root)
+python installer/ui/server.py
 
 # release ZIP (from repo root)
 python scripts/build_release.py --refresh --zip

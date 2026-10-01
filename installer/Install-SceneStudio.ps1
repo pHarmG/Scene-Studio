@@ -85,10 +85,10 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
 # In both cases $BundleRoot ends up as the product root.
 # ---------------------------------------------------------------------------
 
-if (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'installer\deploy_scene_studio.ps1')) {
+if (Test-Path -LiteralPath (Join-Path (Join-Path $PSScriptRoot 'installer') 'deploy_scene_studio.ps1')) {
     $BundleRoot = (Resolve-Path $PSScriptRoot).Path
-    $InternalInstaller = Join-Path $BundleRoot 'installer\deploy_scene_studio.ps1'
-    $ProfileTool = Join-Path $BundleRoot 'installer\scene-studio-profile.py'
+    $InternalInstaller = Join-Path (Join-Path $BundleRoot 'installer') 'deploy_scene_studio.ps1'
+    $ProfileTool = Join-Path (Join-Path $BundleRoot 'installer') 'scene-studio-profile.py'
 } elseif (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'deploy_scene_studio.ps1')) {
     $BundleRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
     $InternalInstaller = Join-Path $PSScriptRoot 'deploy_scene_studio.ps1'
@@ -96,7 +96,7 @@ if (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'installer\deploy_scene_stud
 } else {
     throw 'Install-SceneStudio.ps1 could not locate the installer support tree. Re-extract the full release.'
 }
-$CardDist = Join-Path $BundleRoot 'home-assistant\scene-studio-card\dist\scene-studio-card.js'
+$CardDist = Join-Path (Join-Path (Join-Path (Join-Path $BundleRoot 'home-assistant') 'scene-studio-card') 'dist') 'scene-studio-card.js'
 $CardWwwDir = '/config/www/scene-studio-card'
 $CardWwwFile = "$CardWwwDir/scene-studio-card.js"
 foreach ($required in @($InternalInstaller, $ProfileTool)) {
@@ -512,7 +512,10 @@ if (-not $Unattended) {
 
 $script:Stage = 'workstation-checks'
 Write-Step '1/9 Checking this computer (deployment workstation)'
-foreach ($dep in @(@{ Name = 'python'; Hint = 'install Python 3.9+ from https://python.org' }, @{ Name = 'ssh'; Hint = 'install OpenSSH client (Windows: Settings > Apps > Optional Features)' })) {
+foreach ($dep in @(
+    @{ Name = 'python'; Hint = 'install Python 3.9+ from https://python.org' },
+    @{ Name = 'ssh'; Hint = $(if ($IsWindows) { 'install OpenSSH client (Windows: Settings > Apps > Optional Features)' } else { 'install the OpenSSH client (macOS ships one; Linux: your package manager openssh-client)' }) }
+)) {
     $cmd = Get-Command $dep.Name -ErrorAction SilentlyContinue
     if (-not $cmd) {
         throw "Missing dependency: $($dep.Name). $($dep.Hint)"
