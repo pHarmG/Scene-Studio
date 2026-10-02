@@ -18,7 +18,7 @@ const state = {
 const STEPS = [
   { n: 1, title: "This computer" },
   { n: 2, title: "Home Assistant" },
-  { n: 3, title: "AppDaemon host" },
+  { n: 3, title: "Detected setup" },
   { n: 4, title: "Config directory" },
   { n: 5, title: "Lighting sources" },
   { n: 6, title: "Review" },
@@ -93,7 +93,10 @@ function answers() {
 
 async function saveAnswers(patch) {
   try {
+    const previous = answers();
     const payload = await api("/api/answers", { method: "POST", body: patch });
+    const topologyKeys = ["ha_url", "ssh_host", "ssh_user", "ssh_port", "appdaemon_config_root", "addon_root_choice", "appdaemon_http_url", "ha_config_filesystem_confirmed"];
+    if (topologyKeys.some((key) => previous[key] !== payload.answers[key])) state.probes = {};
     state.session.answers = payload.answers;
     state.plan = null; // any answer change invalidates the review plan
     updateStatusbar();
@@ -180,7 +183,7 @@ function checkRow({ key, title, desc, checked, onChange }) {
 function inferredHttpUrl() {
   const a = answers();
   if (a.appdaemon_http_url) return String(a.appdaemon_http_url);
-  let host = (a.ssh_host || "").toString().replace(/^.*@/, "").replace(/:\d+$/, "");
+  let host = (a.ssh_host || (a.ha_url ? new URL(a.ha_url).hostname : "")).toString().replace(/^.*@/, "").replace(/:\d+$/, "");
   if (!host && a.ha_url) {
     try {
       host = new URL(a.ha_url).hostname;
@@ -275,7 +278,8 @@ function renderStep2(container) {
         text: "Test connection",
         onclick: async () => {
           await saveAnswers({ ha_url: urlInput.value.trim() });
-          runProbes(["ha_api", "ha_auth"], row);
+          await runProbes(["ha_api", "ha_auth"], row);
+          if (state.probes.ha_auth?.status === "ok") await runProbes(["topology"], row);
         },
       }),
       row,
@@ -286,8 +290,26 @@ function renderStep2(container) {
 }
 
 function renderStep3(container) {
+  const detected = state.probes.topology;
+  const topology = detected?.data?.topology || state.session.topology;
+  const ready = detected?.status === "ok";
+  container.append(...stepHeading(3, "Detected setup", "For an AppDaemon add-on, SSH accesses Home Assistant's add-on files. AppDaemon does not need its own SSH service."));
+  const checks = el("div", { class: "card" }, el("h3", { text: ready ? "Home Assistant + AppDaemon detected" : "Automatic setup detection was incomplete." }));
+  for (const [label, key] of [["SSH filesystem access", "ssh"], ["AppDaemon add-on", "appdaemon_root"], ["AppDaemon HTTP", "appdaemon_http"], ["Restart capability", "supervisor"]]) {
+    checks.append(el("div", { class: "status-row" }, pill(state.probes[key]?.status || "pending"), el("span", { text: label })));
+  }
+  if (topology?.appdaemon_config_root) checks.append(el("div", { text: `AppDaemon config: ${topology.appdaemon_config_root}` }));
+  checks.append(el("button", { text: "Detect setup", onclick: () => runProbes(["topology"]) }));
+  if (ready) checks.append(el("button", { class: "primary", text: "Continue to lighting sources", onclick: () => { state.step = 5; renderStep(); } }));
+  container.append(checks);
+  const advanced = el("details", { class: "fold", ...(ready ? {} : { open: "" }) }, el("summary", { text: "Configure advanced topology" }));
+  container.append(advanced);
+  renderAdvancedTopology(advanced);
+}
+
+function renderAdvancedTopology(container) {
   container.append(
-    ...stepHeading(3, "AppDaemon host", "The ssh target is the machine running the AppDaemon add-on — often the same box as Home Assistant, but it does not have to be."),
+    ...stepHeading(3, "Filesystem access", "Use the SSH host that can access the AppDaemon add-on files. Custom and split hosts are supported."),
   );
   const a = answers();
   const haHost = a.ha_url ? (() => { try { return new URL(a.ha_url).hostname; } catch (err) { return ""; } })() : "";
@@ -298,7 +320,7 @@ function renderStep3(container) {
   const httpInput = textInput(a.appdaemon_http_url, `${inferredHttpUrl()}  (inferred — leave empty to use)`, (value) => saveAnswers({ appdaemon_http_url: value || null }));
 
   container.append(
-    field("AppDaemon ssh host", sshHost, "key authentication required — the installer cannot type passwords; https://github.com/hassio-addons/app-ssh"),
+    field("Home Assistant filesystem host (SSH)", sshHost, "key authentication required — the installer cannot type passwords; https://github.com/hassio-addons/app-ssh"),
     field("ssh username (optional)", sshUser),
     field("ssh port", portInput),
     field("Scene Studio / AppDaemon HTTP address (optional)", httpInput, "AppDaemon serves HTTP on its dashboard port (default 5050). Leave empty to infer from the ssh host — asked again only if inference is unreachable; https://appdaemon.readthedocs.io/en/latest/ADDON.html"),
@@ -317,14 +339,16 @@ function renderStep3(container) {
             ssh_port: Number(portInput.value) || 22,
             appdaemon_http_url: httpInput.value.trim() || null,
           });
-          runProbes(["ssh", "appdaemon_http"], row);
+          runProbes(["topology"], row);
         },
       }),
       row,
     ),
     probeCard("ssh target", "ssh"),
     probeCard("Scene Studio HTTP", "appdaemon_http"),
+    checkRow({ title: "This SSH host also exposes the configuration of the Home Assistant API above", desc: "For split hosts or SSH aliases only: confirm the filesystem belongs to this Home Assistant, not a different installation. HA markers and write access are checked independently before offering the card.", checked: a.ha_config_filesystem_confirmed, onChange: (value) => saveAnswers({ ha_config_filesystem_confirmed: value }).then(() => runProbes(["topology"])) }),
   );
+  renderStep4(container);
 }
 
 function renderStep4(container) {
@@ -567,7 +591,7 @@ function renderStep6(container) {
     return;
   }
 
-  const summary = el("div", { class: "card" }, el("table", { class: "summary" }));
+  const summary = el("div", { class: "card" }, el("h3", { text: "Deployment topology" }), el("table", { class: "summary" }));
   const table = summary.querySelector("table");
   for (const rowDef of plan.summary) {
     table.append(el("tr", {}, el("td", { text: rowDef.label }), el("td", { text: rowDef.value })));
@@ -607,7 +631,8 @@ function renderStep6(container) {
     checked: answers().install_ha_card,
     onChange: (value) => { saveAnswers({ install_ha_card: value }).then(() => buildPlan()); },
   });
-  container.append(cardToggle);
+  if (plan.card_auto_available) container.append(cardToggle);
+  else container.append(el("div", { class: "note", text: "Automatic HA card deployment is unavailable because HA config filesystem access is not confirmed. Copy home-assistant/scene-studio-card/dist/scene-studio-card.js to HA /config/www/scene-studio-card/ and register /local/scene-studio-card/scene-studio-card.js as a JavaScript module; use custom:scene-studio-card." }));
 }
 
 async function buildPlan(statusRow) {
@@ -884,6 +909,7 @@ function renderStep() {
 
 async function loadSession() {
   state.session = await api("/api/session");
+  state.probes = state.session.probes || {};
   // refresh mid-install: jump straight to the run console
   if (state.run.status === "idle") {
     const runStatus = state.session.run.status;

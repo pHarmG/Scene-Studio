@@ -117,17 +117,23 @@ python scripts/security/scan_secrets.py
 
 ## Installer architecture
 
-- `Install-SceneStudio.ps1` (wizard): asks plain questions, probes read-only,
-  shows a review, then drives `installer/deploy_scene_studio.ps1` and the
-  two deployers. Models **three independent endpoints**: HA API URL, AppDaemon
-  ssh target, and the Scene Studio/AppDaemon HTTP endpoint (inferred from the
-  ssh target + port 5050, tested, asked only when inference fails). HA Core
-  and AppDaemon do not have to share a host.
+- `Install-SceneStudio.ps1` (wizard): authenticates HA, then detects the common
+  HAOS/Supervised topology using SSH filesystem access to the HA hostname,
+  `/addon_configs` markers and HTTP port 5050. One candidate is selected
+  automatically; incomplete detection exposes advanced host/user/port/root/HTTP
+  choices. The installer-only topology model records capabilities and Supervisor
+  restart availability; current deployers require Supervisor restart before
+  writes. HA API, filesystem SSH and AppDaemon HTTP remain independent.
+  Local transport is reserved but unsupported: visible paths/localhost do not
+  establish namespace identity. The browser UI mirrors these read-only probes.
 - The wizard writes only: a marker-delimited `scene_studio` block in
   `apps.yaml`, optionally a named secret in `secrets.yaml` (values never
   displayed), the backend/Workbench trees via the deployers, and — if opted
   in — the prebuilt card into `/config/www/scene-studio-card/` (it never
-  modifies a dashboard).
+  modifies a dashboard). Card deployment requires independently confirmed HA
+  config filesystem access; split/alias hosts also require an explicit operator
+  binding and HA marker/version/write-access checks. Otherwise manual card
+  guidance is printed.
 - Fresh installs must come up in `registry_admin` (provider writes blocked);
   upgrades preserve the live runtime mode.
 - Deployment profiles are validated by `installer/scene-studio-profile.py`

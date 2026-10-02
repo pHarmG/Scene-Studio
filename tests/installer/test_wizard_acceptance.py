@@ -66,6 +66,7 @@ WIZARD_ANSWERS_DEFAULT = {
     "appdaemon_config_root": ADDON_ROOT,
     "store_root": "/config/scene_studio_store",
     "install_ha_card": True,
+    "ha_config_filesystem_confirmed": True,
     "providers": {
         "ha_light": True,
         "hue": {"enabled": False, "host": None, "bridge_id": None},
@@ -113,6 +114,10 @@ def _strip_ansi(text: str) -> str:
 def _seed_fresh_target(state_dir: Path) -> None:
     addon = state_dir / "fs" / ADDON_ROOT.strip("/")
     addon.mkdir(parents=True, exist_ok=True)
+    config = state_dir / "fs/config"
+    config.mkdir(parents=True, exist_ok=True)
+    (config / "configuration.yaml").write_text("default_config:\n", encoding="utf-8")
+    (config / ".HA_VERSION").write_text("2026.9.10", encoding="utf-8")
     # AppDaemon's own config file is the auto-detection marker
     (addon / "appdaemon.yaml").write_text("appdaemon:\n  latitude: 0\n", encoding="utf-8")
     (state_dir / "apps_mode").write_text("registry_admin", encoding="utf-8")
@@ -490,5 +495,7 @@ def test_wizard_config_rollback_and_sanitized_support_report(release_dir, tmp_pa
         report = json.loads(archive.read(report_name).decode("utf-8"))
         assert report["remote_changes"] == "previous configuration restored successfully"
         assert report["error"]
+        assert report["topology"]["filesystem_transport"] == "ssh"
+        assert report["topology"]["appdaemon_restart_strategy"] == "supervisor"
         assert report["endpoints"]["ha_api"].startswith("http://127.0.0.1:")
         assert report["endpoints"]["appdaemon_http"].startswith("http://appdaemon.example.test")

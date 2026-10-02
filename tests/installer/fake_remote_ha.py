@@ -378,13 +378,15 @@ class FakeHost:
         if words and words[0] == "!":
             negate = True
             words = words[1:]
-        if len(words) != 2 or words[0] not in ("-d", "-f", "-e", "-L"):
+        if len(words) != 2 or words[0] not in ("-d", "-f", "-e", "-L", "-w"):
             raise CommandError(2, f"fake-ssh: unsupported test: {command}")
         target = self.resolve(words[1])
         if words[0] == "-d":
             result = target.is_dir()
         elif words[0] == "-f":
             result = target.is_file()
+        elif words[0] == "-w":
+            result = target.exists() and os.access(target, os.W_OK)
         elif words[0] == "-L":
             result = target.is_symlink()
         else:
@@ -618,6 +620,9 @@ def serve_api(port: int, state_dir: Path) -> None:
             self.wfile.write(body)
 
         def do_GET(self):  # noqa: N802
+            if self.path == "/api/services":
+                self._send(200, [{"domain":"hassio", "services":{"addon_restart":{}}}])
+                return
             if self.path == "/api/config":
                 self._send(200, {"version": "2026.9.10"})
                 return

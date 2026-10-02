@@ -25,17 +25,66 @@ Two roles are independent and separately configured:
   Home Assistant or AppDaemon locally. Holds the extracted bundle and the
   generated deployment configuration (temp dir).
 - **Remote target** — the Home Assistant + AppDaemon host. Reached over SSH
-  (AppDaemon filesystem deployment) and the Home Assistant HTTP API (health
+  (add-on filesystem deployment) and the Home Assistant HTTP API (health
   and AppDaemon restart). The API address and the SSH host/port/user are
   configured independently and may differ.
+
+### Common HAOS/Supervised path
+
+After authenticating HA, the wizard tries SSH to its hostname using existing
+key access, discovers AppDaemon candidates under `/addon_configs` using
+`appdaemon.yaml` or `apps/` markers, automatically selects exactly one candidate,
+and probes AppDaemon HTTP on port 5050. Multiple candidates require a choice.
+The authenticated HA service list must advertise `hassio.addon_restart` before
+automatic installation can write. The existing deployers remain authoritative
+for activation, health checking and rollback; Core is not restarted by the wizard.
+
+### Advanced/custom topology
+
+The HA API URL, filesystem SSH target and AppDaemon HTTP URL remain independent.
+An explicit host, username, non-default port, add-on root or HTTP URL takes
+precedence over detection. Failed detection offers advanced configuration;
+unattended runs report the missing answer deterministically and never prompt.
+
+The installer-only topology model (`installer/topology.ps1`, mirrored for
+read-only browser probes in `installer/topology.py`) records HA API,
+filesystem transport/host/user/port, add-on root, HTTP URL, restart strategy and
+capabilities. `supervisor` is the supported restart strategy. `manual` is a
+reported unsupported capability, not permission to skip health checks.
+
+Card access is separate from add-on access. For the common host, the installer
+checks `/config/configuration.yaml`, matching `/config/.HA_VERSION`, writable
+`/config` and (when it exists) writable `/config/www`. A split/alias host also
+requires `ha_config_filesystem_confirmed: true`: confirm only if this filesystem
+belongs to the HA API being installed. Those markers alone do not prove a remote
+filesystem belongs to the same HA. If capability is absent, the card is skipped
+even when requested. Copy `home-assistant/scene-studio-card/dist/scene-studio-card.js`
+manually to HA `/config/www/scene-studio-card/scene-studio-card.js`, register
+`/local/scene-studio-card/scene-studio-card.js` as a JavaScript module, then use
+`custom:scene-studio-card`. No dashboard is edited automatically.
+
+### Local/native filesystem decision
+
+Direct filesystem deployment is intentionally unavailable. The topology
+contract reserves `local`, but always selects `ssh` and reports
+`local_filesystem_supported: false`. Neither hostname equality nor a visible
+`/config`/`/addon_configs` proves filesystem namespace identity: the installer
+could itself be inside a container or add-on. Enabling local transport later
+requires an authoritative namespace binding, validated writable add-on paths,
+a known restart boundary and deployer-equivalent backup/staging/hash/health/
+rollback support. This pass does not partially implement local writes or use
+SSH-to-self heuristics.
 
 ### Noninteractive wizard answers file
 
 `Install-SceneStudio.ps1 -Unattended -Answers <file> [-Yes]` runs the guided
-flow without prompts. Keys: `ha_url` (required), `ssh_host` (required),
+flow without prompts. Keys: `ha_url` (required), `ssh_host` (optional; defaults to the HA URL hostname),
 `ssh_user`, `ssh_port`, `appdaemon_config_root` (null = auto-detect),
 `addon_root_choice`, `store_root`, `providers` (`ha_light` bool; `hue`/`wled`/
 `hyperhdr` objects with `enabled`/`host`, hue also `bridge_id`),
+`appdaemon_http_url` (optional; inferred from the filesystem host on port 5050),
+`install_ha_card`, `ha_config_filesystem_confirmed` (default false; binds a
+split/alias filesystem target to the selected HA API for card deployment),
 `confirm_install`. Secrets are NEVER in the file: the wizard reads
 `SCENE_STUDIO_HA_TOKEN` (and `SCENE_STUDIO_HUE_APP_KEY` when Hue is enabled)
 from the environment.

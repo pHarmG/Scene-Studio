@@ -67,8 +67,9 @@ def _free_port() -> int:
 class FakeHaApi:
     """Localhost HA REST stub: /api/config, addon_restart, scene_studio_api."""
 
-    def __init__(self) -> None:
-        self.port = _free_port()
+    def __init__(self, *, supervisor_available=True, port=None) -> None:
+        self.supervisor_available = supervisor_available
+        self.port = port or _free_port()
         self.restart_calls = 0
 
         class Handler(BaseHTTPRequestHandler):
@@ -81,7 +82,9 @@ class FakeHaApi:
                 handler.wfile.write(body)
 
             def do_GET(handler):  # noqa: N802
-                if handler.path == "/api/config":
+                if handler.path == "/api/services":
+                    handler._send(200, [{"domain": "hassio", "services": {"addon_restart": {}}}] if self.supervisor_available else [])
+                elif handler.path == "/api/config":
                     handler._send(200, {"version": "2026.9.10"})
                 else:
                     handler._send(404, {"message": "not found"})

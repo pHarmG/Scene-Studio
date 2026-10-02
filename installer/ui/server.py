@@ -68,6 +68,10 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+# Shared installer-only contract; the CLI mirrors it in topology.ps1.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from topology import new_topology, endpoint_host, ha_filesystem_binding, common_ready
+
 BUNDLE_ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -92,6 +96,7 @@ DEFAULT_ANSWERS = {
     "store_root": "/config/scene_studio_store",
     "appdaemon_http_url": None,
     "install_ha_card": True,
+    "ha_config_filesystem_confirmed": False,
     "providers": {
         "ha_light": True,
         "hue": {"enabled": False, "host": None, "bridge_id": None},
@@ -103,6 +108,9 @@ DEFAULT_ANSWERS = {
 PROBE_NAMES = (
     "ha_api",
     "ha_auth",
+    "topology",
+    "supervisor",
+    "ha_www",
     "ssh",
     "appdaemon_http",
     "appdaemon_root",
@@ -347,7 +355,17 @@ class InstallerSession:
 
     def update_answers(self, patch: dict) -> dict:
         with self.lock:
-            self._merge_answers(self.answers, patch)
+            updated = self.public_answers()
+            self._merge_answers(updated, patch)
+            try:
+                new_topology(updated)
+            except ValueError as exc:
+                raise UiError(400, str(exc)) from None
+            topology_keys = ("ha_url", "ssh_host", "ssh_user", "ssh_port", "appdaemon_config_root", "addon_root_choice", "appdaemon_http_url", "ha_config_filesystem_confirmed")
+            if any(updated.get(k) != self.answers.get(k) for k in topology_keys):
+                for name in ("topology", "ssh", "appdaemon_root", "appdaemon_http", "supervisor", "ha_www", "remote_state"):
+                    self.probe_results.pop(name, None)
+            self.answers = updated
             return self.public_answers()
 
     def _merge_answers(self, target: dict, patch: dict) -> None:
@@ -377,7 +395,9 @@ class InstallerSession:
                     target[key] = int(value)
                 except (TypeError, ValueError):
                     raise UiError(400, "ssh_port: expected a number") from None
-            elif key in ("install_ha_card",):
+            elif key in ("install_ha_card", "ha_config_filesystem_confirmed"):
+                if not isinstance(value, bool):
+                    raise UiError(400, f"{key}: expected a boolean")
                 target[key] = bool(value)
             elif key in ("appdaemon_config_root", "addon_root_choice", "appdaemon_http_url"):
                 target[key] = value if value not in ("", None) else None
@@ -421,6 +441,8 @@ class InstallerSession:
                 handler = getattr(self, f"_probe_{name}")
                 try:
                     results[name] = handler()
+                    if name == "topology":
+                        results.update({key: self.probe_results[key] for key in ("ssh", "appdaemon_root", "appdaemon_http", "supervisor", "ha_www", "remote_state")})
                 except Exception as exc:  # a probe must never crash the UI; it reports, not throws
                     results[name] = {"status": "fail", "detail": f"probe error: {exc}", "data": {}}
                 self.probe_results[name] = results[name]
@@ -474,17 +496,77 @@ class InstallerSession:
             version = str(probe["body"].get("version", ""))
         return {"status": "ok", "detail": f"authenticated; Home Assistant {version}".strip(), "data": {"version": version}}
 
+    def topology_snapshot(self) -> dict:
+        topology = new_topology(self.answers)
+        caps = topology["capabilities"]
+        for cap, probe in (("ssh_filesystem_available", "ssh"),
+                           ("appdaemon_root_detected", "appdaemon_root"),
+                           ("appdaemon_http_reachable", "appdaemon_http"),
+                           ("supervisor_restart_available", "supervisor"),
+                           ("ha_www_access_available", "ha_www")):
+            caps[cap] = self.probe_results.get(probe, {}).get("status") == "ok"
+        if caps["supervisor_restart_available"]:
+            topology["appdaemon_restart_strategy"] = "supervisor"
+        return topology
+
     def _ssh_destination(self) -> str:
-        host = (self.answers.get("ssh_host") or "").strip()
-        if not host:
-            ha_url = (self.answers.get("ha_url") or "").strip()
-            if ha_url:
-                try:
-                    host = re.match(r"^[a-z]+://([^/:?#]+)", ha_url, re.IGNORECASE).group(1)
-                except AttributeError:
-                    host = ""
-        user = (self.answers.get("ssh_user") or "").strip()
+        topology = new_topology(self.answers)
+        host, user = topology["filesystem_host"], topology["filesystem_user"]
         return f"{user}@{host}" if user else host
+
+    def _probe_supervisor(self) -> dict:
+        url = self.answers.get("ha_url", "").rstrip("/")
+        token = self.effective_ha_token()
+        if not url or not token:
+            return {"status": "skipped", "detail": "Authenticate Home Assistant first.", "data": {}}
+        response = http_probe(f"{url}/api/services", headers={"Authorization": f"Bearer {token}"})
+        body = response.get("body")
+        available = response.get("http_status") == 200 and isinstance(body, list) and any(
+            isinstance(item, dict) and item.get("domain") == "hassio" and
+            "addon_restart" in (item.get("services") or {}) for item in body)
+        return {"status": "ok" if available else "warn",
+                "detail": "Home Assistant Supervisor restart available" if available else
+                "Supervisor restart unavailable. Current deployers require it; automatic installation cannot proceed.",
+                "data": {"strategy": "supervisor" if available else "manual"}}
+
+    def _probe_ha_www(self) -> dict:
+        topology = new_topology(self.answers)
+        available = False
+        if ha_filesystem_binding(topology, self.answers.get("ha_config_filesystem_confirmed", False)):
+            version = self.probe_results.get("ha_auth", {}).get("data", {}).get("version")
+            if not version:
+                auth = self._probe_ha_auth()
+                self.probe_results["ha_auth"] = auth
+                version = auth.get("data", {}).get("version")
+            try:
+                marker = self._ssh_or_fail("sudo test -f '/config/configuration.yaml' && sudo test -f '/config/.HA_VERSION' && sudo test -w '/config' && sudo cat '/config/.HA_VERSION'")
+                self._ssh_or_fail("if sudo test -e '/config/www'; then sudo test -w '/config/www'; fi")
+                available = bool(version and marker.strip() == version)
+            except UiError:
+                pass
+        return {"status": "ok" if available else "skipped",
+                "detail": "HA config filesystem confirmed; automatic card deployment available" if available else
+                "HA config filesystem not confirmed. Copy the card manually to HA /config/www/scene-studio-card/ and register /local/scene-studio-card/scene-studio-card.js as a JavaScript module (custom:scene-studio-card).",
+                "data": {"available": available}}
+
+    def _probe_topology(self) -> dict:
+        # Read-only detection; no deployment logic is duplicated here.
+        for name in ("ssh", "appdaemon_root", "appdaemon_http", "supervisor", "ha_www", "remote_state"):
+            if ((name != "ssh" and self.probe_results.get("ssh", {}).get("status") != "ok") or
+                    (name == "remote_state" and self.probe_results.get("appdaemon_root", {}).get("status") != "ok")):
+                result = {"status": "skipped", "detail": "SSH filesystem access is unavailable.", "data": {}}
+            else:
+                try:
+                    result = getattr(self, f"_probe_{name}")()
+                except (UiError, ValueError):
+                    result = {"status": "fail", "detail": "Detection failed; check advanced topology.", "data": {}}
+            self.probe_results[name] = result
+        topology = self.topology_snapshot()
+        ready = common_ready(topology)
+        return {"status": "ok" if ready else "warn",
+                "detail": "Detected Home Assistant + AppDaemon setup" if ready else
+                "Automatic setup detection was incomplete. Configure advanced topology.",
+                "data": {"topology": topology, "advanced_required": not ready}}
 
     def _probe_ssh(self) -> dict:
         destination = self._ssh_destination()
@@ -505,12 +587,7 @@ class InstallerSession:
         }
 
     def appdaemon_http_url(self) -> str:
-        explicit = self.answers.get("appdaemon_http_url")
-        if explicit:
-            return str(explicit).rstrip("/")
-        destination = self._ssh_destination()
-        host = destination.split("@")[-1].split(":")[0]
-        return f"http://{host}:5050"
+        return new_topology(self.answers)["appdaemon_http_url"]
 
     def _probe_appdaemon_http(self) -> dict:
         url = self.appdaemon_http_url()
@@ -746,8 +823,8 @@ class InstallerSession:
         ha_url = (answers.get("ha_url") or "").strip().rstrip("/")
         if not ha_url:
             raise UiError(400, "Home Assistant address is required.")
-        if not (answers.get("ssh_host") or "").strip():
-            raise UiError(400, "ssh target is required.")
+        if not new_topology(answers)["filesystem_host"]:
+            raise UiError(400, "SSH filesystem host is required.")
         root = answers.get("appdaemon_config_root")
         if not root:
             raise UiError(400, "AppDaemon config directory is required (run detection or enter it).")
@@ -795,6 +872,8 @@ class InstallerSession:
         if self.run_status == "running":
             raise UiError(409, "An install is running; the plan is unavailable until it finishes.")
         with self.lock:
+            topology_probe = self._probe_topology()
+            self.probe_results["topology"] = topology_probe
             profile = self.build_profile()
             workdir = self._ensure_workdir()
             profile_path = workdir / "scene-studio.profile.json"
@@ -841,6 +920,8 @@ class InstallerSession:
                 "ok": True,
                 "errors": [],
                 "profile": profile,
+                "topology": self.topology_snapshot(),
+                "card_auto_available": self.topology_snapshot()["capabilities"]["ha_www_access_available"],
                 "summary": self._plan_summary(profile, install_kind),
                 "install_kind": install_kind,
                 "runtime_mode": profile["runtime_mode"],
@@ -871,16 +952,17 @@ class InstallerSession:
         )
         return [
             {"label": "Home Assistant API", "value": profile["ha_url"]},
-            {"label": "AppDaemon (ssh)", "value": f"{self._ssh_destination()} port {answers.get('ssh_port') or 22}"},
+            {"label": "Filesystem access", "value": f"SSH → {self._ssh_destination()} port {answers.get('ssh_port') or 22}"},
             {"label": "Scene Studio HTTP", "value": self.appdaemon_http_url()},
             {"label": "AppDaemon config", "value": profile["appdaemon_config_root"]},
             {"label": "Update executor", "value": "apps/scene_studio_update_supervisor.py + apps/scene_studio_release.py; independent recovery companion"},
+            {"label": "Restart", "value": "Home Assistant Supervisor" if self.topology_snapshot()["capabilities"]["supervisor_restart_available"] else "manual (automatic installation unavailable)"},
             {"label": "Restart effect", "value": "AppDaemon add-on only; Home Assistant Core is preserved"},
             {"label": "Scene Studio data", "value": profile["store_root"]},
             {"label": "Deployment type", "value": "upgrade of the existing install" if install_kind == "upgrade" else "FRESH install"},
             {"label": "Runtime mode", "value": profile["runtime_mode"] + mode_note},
             {"label": "Lighting sources", "value": ", ".join(enabled) or "none"},
-            {"label": "HA dashboard card", "value": "yes — deploys to /config/www/scene-studio-card/ (no dashboard is modified)" if answers.get("install_ha_card") else "no"},
+            {"label": "HA dashboard card", "value": "yes — deploys to /config/www/scene-studio-card/ (no dashboard is modified)" if answers.get("install_ha_card") and self.topology_snapshot()["capabilities"]["ha_www_access_available"] else "manual deployment guidance (HA filesystem access not confirmed)" if not self.topology_snapshot()["capabilities"]["ha_www_access_available"] else "no"},
         ]
 
     def _read_remote_text(self, remote_path: str) -> str | None:
@@ -1034,6 +1116,7 @@ class InstallerSession:
                 "secrets_entered": {"ha_token": bool(self.ha_token or env_ha_token), "hue_key": bool(self.hue_key)},
                 "answers": self.public_answers(),
                 "probes": self.probe_results,
+                "topology": self.topology_snapshot(),
                 "run": {key: value for key, value in self.run_snapshot(0).items() if key != "lines"},
             }
 

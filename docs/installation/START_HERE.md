@@ -65,10 +65,41 @@ python installer/ui/server.py
 
 (it opens your browser automatically; see [INSTALLER_UI.md](INSTALLER_UI.md)).
 
-The wizard asks roughly six questions — your Home Assistant address, the
-ssh target, which lighting sources to discover (Hue / WLED / HA lights), and
-any addresses those need — then shows exactly what it will change and asks
-for a final confirmation before touching anything.
+The wizard asks for your Home Assistant address and token, then tries existing
+SSH access to that hostname. On a common HAOS/Supervised setup it finds the
+AppDaemon add-on under `/addon_configs`, checks HTTP on port 5050, and checks
+Supervisor restart capability. You see the detected setup and choose your
+lighting sources; no separate AppDaemon SSH service or hostname is needed.
+The wizard shows exactly what it will change and requires confirmation first.
+
+### Common HAOS/Supervised path
+
+Use the same Home Assistant URL you open in your browser. SSH must already
+work using your computer's default account/key or SSH configuration. A single
+AppDaemon candidate is selected automatically. The Workbench endpoint defaults
+to `http://<HA-host>:5050` and is tested before continuing.
+
+### Advanced/custom topology
+
+If automatic detection is incomplete, open **Configure advanced topology** in
+the browser wizard, or answer the CLI's fallback questions. You can specify the
+filesystem SSH host, username and port, select among several add-on directories,
+or supply a separate AppDaemon HTTP address. The filesystem host is whichever
+machine exposes the add-on files; HA's API and AppDaemon HTTP may be elsewhere.
+The review shows all three addresses. Current automatic deployments require
+HA Supervisor's AppDaemon restart capability; manual restart targets are
+reported before any writes and are not automatically installed.
+
+Automatic dashboard-card deployment is offered only when that SSH connection
+also exposes the configuration of the selected Home Assistant. Split hosts and
+SSH aliases need an explicit filesystem confirmation, and the installer checks
+HA markers, version and write access independently. Otherwise it installs
+Scene Studio and prints manual card deployment/registration instructions.
+
+Running the installer on the same machine does not enable direct filesystem
+writes: local mode is reserved, but not implemented in this pass. Container
+namespaces can make `/config` or `localhost` refer to a different installation;
+the validated deployers currently require SSH.
 
 ## After the install
 

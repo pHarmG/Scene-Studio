@@ -11,7 +11,7 @@
   Three INDEPENDENT endpoints are modeled; none is assumed to imply another:
 
     1. Home Assistant API   (https://homeassistant.example:8123)
-    2. AppDaemon ssh target (appdaemon-user@appdaemon-host:22)
+    2. SSH filesystem target (HA host for the common add-on setup)
     3. Scene Studio HTTP    (http://appdaemon-host:5050) — the AppDaemon
        add-on serving the Workbench and the Scene Studio API.
 
@@ -49,11 +49,12 @@
       and are NEVER read from or written to the answers file.
 
   Answers JSON keys (all optional unless noted):
-      ha_url (required), ssh_host (required), ssh_user, ssh_port,
+      ha_url (required), ssh_host (default = HA hostname), ssh_user, ssh_port,
       appdaemon_config_root (null = auto-detect), addon_root_choice (1-based,
       when several candidates are found), store_root,
       appdaemon_http_url (null = infer from the ssh target + port 5050),
-      install_ha_card (bool, default true),
+      install_ha_card (bool, default true when HA filesystem capability is confirmed),
+      ha_config_filesystem_confirmed (bool, explicit binding for split/alias hosts),
       providers: { ha_light: bool, hue: {enabled, host, bridge_id},
                    wled: {enabled, host}, hyperhdr: {enabled, host,
                    default_policy} },
@@ -212,6 +213,7 @@ function Write-SupportReport {
                 appdaemon_http   = $Context['AppDaemonHttp']
                 appdaemon_root   = $Context['AddonRoot']
             }
+            topology             = $script:Topology
             home_assistant_version = $script:HaVersion
             providers_enabled    = $script:EnabledProviderTypes
             provider_reachability = $script:ProviderReachability
@@ -528,6 +530,9 @@ Write-Detail "$pythonVersion"
 Write-Detail "ssh: $SshVersion"
 Record-Probe 'python' "$pythonVersion"
 
+. (Join-Path (Join-Path $BundleRoot 'installer') 'topology.ps1')
+$script:Topology = $null
+
 # ---------------------------------------------------------------------------
 # main flow — every failure lands in the support-report handler below
 # ---------------------------------------------------------------------------
@@ -558,6 +563,7 @@ try {
     Write-Step '2/9 Home Assistant API connection'
     Write-Detail 'The address is the same one you use to open Home Assistant in a browser.'
     $HaUrl = (Get-Answer -Key 'ha_url' -Prompt 'Home Assistant API address' -Default 'http://homeassistant.local:8123' -Required).TrimEnd('/')
+    try { $script:Topology = New-InstallerTopology -HaUrl $HaUrl } catch { $HaUrl = ''; throw }
     Write-Detail "Testing $HaUrl ..."
     try {
         # Any HTTP answer (even 401) proves reachability; only a connection
@@ -598,97 +604,47 @@ try {
         throw "The token was rejected by $HaUrl/api/config : $($_.Exception.Message) Create a fresh token per https://www.home-assistant.io/docs/authentication/."
     }
 
-    # --- 3. AppDaemon (ssh) connection ------------------------------------
-    $script:Stage = 'ssh'
-    Write-Step '3/9 AppDaemon host (ssh connection)'
-    Write-Detail 'The ssh target is the machine running the AppDaemon add-on (often the same box as Home Assistant).'
-    Write-Detail 'ssh add-on setup (key auth required; the wizard cannot type passwords):'
-    Write-Detail '  https://github.com/hassio-addons/app-ssh'
-    $SshHostInput = Get-Answer -Key 'ssh_host' -Prompt 'AppDaemon ssh host (where AppDaemon runs)' -Default ([Uri]$HaUrl).Host -Required
-    $answerPort = $script:AnswersData -and $script:AnswersData.PSObject.Properties.Name -contains 'ssh_port' -and $null -ne $script:AnswersData.ssh_port
-    if ($answerPort) {
-        $ResolvedSshPort = [int]$script:AnswersData.ssh_port
-    } elseif ($SshPort -gt 0) {
-        $ResolvedSshPort = $SshPort
-    } else {
-        $ResolvedSshPort = 22
+    # --- 3. automatic/common SSH filesystem topology ----------------------
+    $script:Stage = 'topology'
+    Write-Step '3/9 Detecting Home Assistant filesystem access'
+    Write-Detail 'The installer accesses add-on files through SSH to the Home Assistant filesystem host.'
+    Write-Detail 'Key authentication setup: https://github.com/hassio-addons/app-ssh'
+    function Get-TopologyAnswer([string]$Key, $Default) {
+        if ($script:AnswersData -and $script:AnswersData.PSObject.Properties.Name -contains $Key -and $null -ne $script:AnswersData.$Key) { return $script:AnswersData.$Key }
+        return $Default
     }
-    if (-not $Unattended) {
-        $portInput = Read-Host -Prompt "ssh port [$(if ($ResolvedSshPort -ne 22) { $ResolvedSshPort } else { '22' })]"
-        if ($portInput) { $ResolvedSshPort = [int]$portInput }
-    }
-    $SshUser = Get-Answer -Key 'ssh_user' -Prompt 'ssh username (empty = ssh default)'
-    $ResolvedSshDestination = if ($SshUser) { "$SshUser@$SshHostInput" } else { $SshHostInput }
-    Write-Detail "Testing ssh $ResolvedSshDestination (port $ResolvedSshPort) ..."
-    $probeArgs = @()
-    if ($ResolvedSshPort -gt 0) { $probeArgs += @('-p', [string]$ResolvedSshPort) }
-    $probeArgs += @('-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', '-o', 'StrictHostKeyChecking=accept-new')
-    $null = & ssh @probeArgs $ResolvedSshDestination 'echo ok' 2>$null
-    Record-Probe 'ssh' $(if ($LASTEXITCODE -eq 0) { "ok $ResolvedSshDestination port $ResolvedSshPort" } else { "failed $ResolvedSshDestination port $ResolvedSshPort" })
-    if ($LASTEXITCODE -ne 0) {
-        throw (
-            "ssh to $ResolvedSshDestination failed. Check the host/port, that ssh key authentication is set up " +
-            '(the wizard cannot type passwords), and that the account can sudo. Run: ssh ' +
-            "$ResolvedSshDestination echo ok"
-        )
-    }
-    Write-Detail 'ssh reachable'
-
-    # --- 3b. Scene Studio / AppDaemon HTTP endpoint -----------------------
-    $script:Stage = 'appdaemon-endpoint'
-    Write-Step '3b/9 Scene Studio HTTP endpoint (AppDaemon)'
-    $explicitHttp = ''
-    if ($AppDaemonHttpUrl) {
-        $explicitHttp = $AppDaemonHttpUrl.TrimEnd('/')
-    } else {
-        $answered = Get-Answer -Key 'appdaemon_http_url' -Prompt '' -Default ''
-        if ($answered) { $explicitHttp = $answered.TrimEnd('/') }
-    }
-    if ($explicitHttp) {
-        $AppDaemonHttp = $explicitHttp
-        Write-Detail "using the provided Scene Studio HTTP endpoint: $AppDaemonHttp"
-    } else {
-        # Infer from the SSH TARGET (not the HA API host): HA Core and
-        # AppDaemon do not have to share a machine or hostname.
-        $inferredHost = ($SshHostInput -replace '^.*@', '') -replace ':\d+$', ''
-        $AppDaemonHttp = "http://${inferredHost}:5050"
-        Write-Detail "inferred $AppDaemonHttp from the ssh target + the default AppDaemon port"
-    }
-    $httpUri = [Uri]$AppDaemonHttp
-    $httpPort = if ($httpUri.Port -gt 0) { $httpUri.Port } else { if ($httpUri.Scheme -eq 'https') { 443 } else { 80 } }
-    $httpReachable = Test-TcpReachable -TargetHost $httpUri.Host -Port $httpPort
-    Record-Probe 'appdaemon_http_tcp' "$AppDaemonHttp $(if ($httpReachable) { 'reachable' } else { 'unreachable' })"
-    if ($httpReachable) {
-        Write-Detail "reachable (tcp/$httpPort)"
-    } else {
-        if ($explicitHttp) {
-            Write-WizardWarning "$AppDaemonHttp is not reachable from this computer right now (firewall?). Continuing; the Workbench URL will use it."
-        } elseif (-not $Unattended) {
-            Write-Detail 'The inferred address is not reachable. Home Assistant and AppDaemon do NOT have to share a host.'
-            Write-Detail 'AppDaemon serves HTTP on its dashboard port (default 5050):'
-            Write-Detail '  https://appdaemon.readthedocs.io/en/latest/ADDON.html'
-            $manual = (Read-Host -Prompt 'Scene Studio / AppDaemon HTTP address (e.g. http://appdaemon-host:5050)').TrimEnd('/')
-            if (-not $manual) {
-                throw 'A Scene Studio HTTP endpoint is required (the Workbench URL and health check come from it).'
-            }
-            $AppDaemonHttp = $manual
-            $httpUri = [Uri]$AppDaemonHttp
-            $httpPort = if ($httpUri.Port -gt 0) { $httpUri.Port } else { 80 }
-            $httpReachable = Test-TcpReachable -TargetHost $httpUri.Host -Port $httpPort
-            Record-Probe 'appdaemon_http_tcp_manual' "$AppDaemonHttp $(if ($httpReachable) { 'reachable' } else { 'unreachable' })"
-            if ($httpReachable) { Write-Detail 'reachable' } else { Write-WizardWarning "still not reachable; continuing with $AppDaemonHttp" }
-        } else {
-            throw (
-                "The inferred Scene Studio HTTP endpoint $AppDaemonHttp is not reachable from this computer. " +
-                "Home Assistant and AppDaemon do not have to share a host: add 'appdaemon_http_url' to the answers file."
-            )
+    $SshHostInput = [string](Get-TopologyAnswer 'ssh_host' ([Uri]$HaUrl).DnsSafeHost)
+    if (-not $SshHostInput) { $SshHostInput = ([Uri]$HaUrl).DnsSafeHost }
+    $SshUser = [string](Get-TopologyAnswer 'ssh_user' '')
+    $ResolvedSshPort = [int](Get-TopologyAnswer 'ssh_port' $(if ($SshPort -gt 0) { $SshPort } else { 22 }))
+    $script:Topology = New-InstallerTopology -HaUrl $HaUrl -HostName $SshHostInput -User $SshUser -Port $ResolvedSshPort
+    $sshOk = Test-InstallerSsh $script:Topology
+    if (-not $sshOk) {
+        Write-Detail 'Automatic setup detection was incomplete. Configure advanced topology.'
+        if ($Unattended) {
+            throw 'SSH filesystem access failed. Configure advanced topology with ssh_host, ssh_user and ssh_port in the answers file; no files were changed.'
         }
+        $SshHostInput = Get-Answer -Key 'ssh_host' -Prompt 'Home Assistant filesystem host (SSH)' -Default $SshHostInput -Required
+        $SshUser = Get-Answer -Key 'ssh_user' -Prompt 'SSH username (empty = SSH default)' -Default $SshUser
+        $portInput = Read-Host -Prompt "SSH port [$ResolvedSshPort]"
+        if ($portInput) { $ResolvedSshPort = [int]$portInput }
+        $script:Topology = New-InstallerTopology -HaUrl $HaUrl -HostName $SshHostInput -User $SshUser -Port $ResolvedSshPort
+        $sshOk = Test-InstallerSsh $script:Topology
     }
+    $ResolvedSshDestination = if ($SshUser) { "$SshUser@$SshHostInput" } else { $SshHostInput }
+    Record-Probe 'ssh' "$(if ($sshOk) { 'ok' } else { 'failed' }) $ResolvedSshDestination port $ResolvedSshPort"
+    if (-not $sshOk) { throw "SSH filesystem access to $ResolvedSshDestination failed; check key authentication and sudo access." }
+    $script:Topology.capabilities.ssh_filesystem_available = $true
+    Write-Detail 'SSH filesystem access available'
+    $restartOk = Test-InstallerSupervisor -HaUrl $HaUrl -Token $HaToken
+    $script:Topology.capabilities.supervisor_restart_available = $restartOk
+    if ($restartOk) { $script:Topology.appdaemon_restart_strategy = 'supervisor' }
+    Record-Probe 'supervisor_restart' "available=$restartOk"
 
     # --- 4. AppDaemon configuration directory ------------------------------
     $script:Stage = 'appdaemon-root'
     Write-Step '4/9 AppDaemon configuration directory'
-    $AddonRoot = Get-Answer -Key 'appdaemon_config_root' -Prompt 'AppDaemon config directory on the target' -Default ''
+    $AddonRoot = [string](Get-TopologyAnswer 'appdaemon_config_root' '')
     if (-not $AddonRoot) {
         Write-Detail 'Auto-detecting AppDaemon under /addon_configs ...'
         $candidates = @()
@@ -697,8 +653,10 @@ try {
             foreach ($name in $names) {
                 $candidate = "/addon_configs/$name"
                 $q = ConvertTo-BashSingleQuoted $candidate
-                $marker = Invoke-WizardSsh -Command "test -f '$q/appdaemon.yaml' || test -d '$q/apps'"
-                if ($LASTEXITCODE -eq 0) { $candidates += $candidate }
+                try {
+                    $null = Invoke-WizardSsh -Command "test -f '$q/appdaemon.yaml' || test -d '$q/apps'"
+                    $candidates += $candidate
+                } catch { continue }
             }
         } catch {
             Write-Detail "auto-detection unavailable ($($_.Exception.Message.Split("`n")[0]))"
@@ -731,8 +689,20 @@ try {
         } else {
             Write-Detail 'no candidates detected under /addon_configs'
             if ($Unattended) {
-                throw 'Could not auto-detect the AppDaemon config directory; provide appdaemon_config_root in the answers file.'
+                throw 'Automatic setup detection was incomplete. Configure advanced topology: provide ssh_host and appdaemon_config_root in the answers file.'
             }
+            Write-Detail 'Automatic setup detection was incomplete. Configure advanced topology.'
+            # SSH to HA may work even when AppDaemon files live elsewhere.
+            $SshHostInput = Get-Answer -Key 'ssh_host' -Prompt 'Home Assistant filesystem host (SSH)' -Default $SshHostInput -Required
+            $SshUser = Get-Answer -Key 'ssh_user' -Prompt 'SSH username (empty = SSH default)' -Default $SshUser
+            $portInput = Read-Host -Prompt "SSH port [$ResolvedSshPort]"
+            if ($portInput) { $ResolvedSshPort = [int]$portInput }
+            $script:Topology = New-InstallerTopology -HaUrl $HaUrl -HostName $SshHostInput -User $SshUser -Port $ResolvedSshPort
+            if (-not (Test-InstallerSsh $script:Topology)) { throw 'Advanced SSH filesystem access failed; nothing was changed.' }
+            $ResolvedSshDestination = if ($SshUser) { "$SshUser@$SshHostInput" } else { $SshHostInput }
+            $script:Topology.capabilities.ssh_filesystem_available = $true
+            $script:Topology.capabilities.supervisor_restart_available = $restartOk
+            if ($restartOk) { $script:Topology.appdaemon_restart_strategy = 'supervisor' }
             Write-Detail 'On Home Assistant OS the AppDaemon add-on config lives under /addon_configs/<add-on slug>'
             Write-Detail '(https://github.com/hassio-addons/addon-appdaemon).'
             $AddonRoot = Read-Host -Prompt 'Enter the AppDaemon config directory (e.g. /addon_configs/a0d7b954_appdaemon)'
@@ -748,6 +718,74 @@ try {
         throw "AppDaemon config directory '$AddonRoot' does not exist on the target. Check the path (find it under /addon_configs on the HA host)."
     }
     Write-Detail "using $AddonRoot"
+
+    # --- 3b. Scene Studio / AppDaemon HTTP endpoint -----------------------
+    $script:Stage = 'appdaemon-endpoint'
+    Write-Step '3b/9 Scene Studio HTTP endpoint (AppDaemon)'
+    $explicitHttp = ''
+    if ($AppDaemonHttpUrl) {
+        $explicitHttp = $AppDaemonHttpUrl.TrimEnd('/')
+    } else {
+        $answered = Get-TopologyAnswer 'appdaemon_http_url' ''
+        if ($answered) { $explicitHttp = $answered.TrimEnd('/') }
+    }
+    if ($explicitHttp) {
+        $AppDaemonHttp = $explicitHttp
+    } else {
+        # Infer from the SSH TARGET (not the HA API host): HA Core and
+        # AppDaemon do not have to share a machine or hostname.
+        $inferredHost = $SshHostInput -replace '^.*@', ''
+        if ($inferredHost.Contains(':') -and -not $inferredHost.StartsWith('[')) { $inferredHost = "[$inferredHost]" }
+        $AppDaemonHttp = "http://${inferredHost}:5050"
+        Write-Detail "inferred $AppDaemonHttp from the ssh target + the default AppDaemon port"
+    }
+    try { $httpUri = Get-InstallerHttpUri $AppDaemonHttp } catch { $AppDaemonHttp = ''; throw }
+    if ($explicitHttp) { Write-Detail "using the provided Scene Studio HTTP endpoint: $AppDaemonHttp" }
+    $httpPort = if ($httpUri.Port -gt 0) { $httpUri.Port } else { if ($httpUri.Scheme -eq 'https') { 443 } else { 80 } }
+    $httpReachable = Test-TcpReachable -TargetHost $httpUri.Host -Port $httpPort
+    Record-Probe 'appdaemon_http_tcp' "$AppDaemonHttp $(if ($httpReachable) { 'reachable' } else { 'unreachable' })"
+    if ($httpReachable) {
+        Write-Detail "reachable (tcp/$httpPort)"
+    } else {
+        if ($explicitHttp) {
+            Write-WizardWarning "$AppDaemonHttp is not reachable from this computer right now (firewall?). Continuing; the Workbench URL will use it."
+        } elseif (-not $Unattended) {
+            Write-Detail 'Automatic setup detection was incomplete. Configure advanced topology.'
+            Write-Detail 'The inferred address is not reachable. Home Assistant and AppDaemon do NOT have to share a host.'
+            Write-Detail 'AppDaemon serves HTTP on its dashboard port (default 5050):'
+            Write-Detail '  https://appdaemon.readthedocs.io/en/latest/ADDON.html'
+            $manual = (Read-Host -Prompt 'Scene Studio / AppDaemon HTTP address (e.g. http://appdaemon-host:5050)').TrimEnd('/')
+            if (-not $manual) {
+                throw 'A Scene Studio HTTP endpoint is required (the Workbench URL and health check come from it).'
+            }
+            $AppDaemonHttp = $manual
+            try { $httpUri = Get-InstallerHttpUri $AppDaemonHttp } catch { $AppDaemonHttp = ''; throw }
+            $httpPort = if ($httpUri.Port -gt 0) { $httpUri.Port } else { 80 }
+            $httpReachable = Test-TcpReachable -TargetHost $httpUri.Host -Port $httpPort
+            Record-Probe 'appdaemon_http_tcp_manual' "$AppDaemonHttp $(if ($httpReachable) { 'reachable' } else { 'unreachable' })"
+            if ($httpReachable) { Write-Detail 'reachable' } else { Write-WizardWarning "still not reachable; continuing with $AppDaemonHttp" }
+        } else {
+            throw (
+                "The inferred Scene Studio HTTP endpoint $AppDaemonHttp is not reachable from this computer. " +
+                "Home Assistant and AppDaemon do not have to share a host: add 'appdaemon_http_url' to the answers file."
+            )
+        }
+    }
+
+    try { $httpUri = Get-InstallerHttpUri $AppDaemonHttp } catch { $AppDaemonHttp = ''; throw }
+    $script:Topology.appdaemon_config_root = $AddonRoot
+    $script:Topology.appdaemon_http_url = $AppDaemonHttp
+    $script:Topology.capabilities.appdaemon_root_detected = $true
+    $script:Topology.capabilities.appdaemon_http_reachable = [bool]$httpReachable
+    $splitConfirmed = Get-TopologyAnswer 'ha_config_filesystem_confirmed' $false
+    if ($splitConfirmed -isnot [bool]) { throw 'ha_config_filesystem_confirmed must be a JSON boolean.' }
+    $script:Topology.capabilities.ha_www_access_available = Test-InstallerHaWww -Topology $script:Topology -HaVersion $script:HaVersion -ConfirmedSplitFilesystem $splitConfirmed
+    Record-Probe 'ha_www_access' "available=$($script:Topology.capabilities.ha_www_access_available)"
+    if ($httpReachable -and $restartOk) {
+        Write-Detail 'Detected setup: API reachable; SSH filesystem access available; AppDaemon add-on found; AppDaemon HTTP reachable; restart capability available.'
+    } else {
+        Write-Detail 'Automatic setup detection was incomplete. Advanced topology is shown in the review.'
+    }
 
     # --- 5. providers -------------------------------------------------------
     $script:Stage = 'providers'
@@ -950,8 +988,10 @@ try {
     # --- 7. review -----------------------------------------------------------
     $script:Stage = 'review'
     Write-Step '7/9 Review'
+    Write-Host '    Deployment topology'
     Write-Host "    Home Assistant API:        $HaUrl"
-    Write-Host "    AppDaemon (ssh):           $ResolvedSshDestination port $ResolvedSshPort"
+    Write-Host "    Filesystem access:         SSH -> $ResolvedSshDestination port $ResolvedSshPort"
+    Write-Host "    Restart:                   $(if ($restartOk) { 'Home Assistant Supervisor' } else { 'manual (automatic installation unavailable)' })"
     Write-Host "    Scene Studio HTTP:         $AppDaemonHttp"
     Write-Host "    AppDaemon config:          $AddonRoot"
     Write-Host '    In-app update executor:    apps/scene_studio_update_supervisor.py + apps/scene_studio_release.py'
@@ -960,7 +1000,13 @@ try {
     Write-Host "    Deployment type:           $(if ($IsUpgrade) { 'upgrade of the existing install' } else { 'FRESH install' })"
     Write-Host "    Runtime mode:              $RuntimeMode$(if ($RuntimeMode -eq 'registry_admin') { '  (provider writes blocked until you deliberately enable them)' })"
     Write-Host "    Lighting sources:          $($enabledList -join ', ')"
-    $InstallCard = Get-AnswerBool -Key 'install_ha_card' -Prompt 'Install the Scene Studio Home Assistant dashboard card' -Default $true
+    $InstallCard = $false
+    if ($script:Topology.capabilities.ha_www_access_available) {
+        $InstallCard = Get-AnswerBool -Key 'install_ha_card' -Prompt 'Install the Scene Studio Home Assistant dashboard card' -Default $true
+    } else {
+        Write-Detail 'HA dashboard card: automatic deployment unavailable; HA /config filesystem access is not confirmed.'
+        Write-Detail 'Manual deployment: copy home-assistant/scene-studio-card/dist/scene-studio-card.js to your HA /config/www/scene-studio-card/; register /local/scene-studio-card/scene-studio-card.js as a JavaScript module, then use custom:scene-studio-card.'
+    }
     Write-Host "    HA dashboard card:         $(if ($InstallCard) { "yes - deploys $CardWwwFile (no dashboard is modified)" } else { 'no' })"
     Write-Host ''
     Write-Host "    apps.yaml change (a clearly marked block; everything else is untouched):"
@@ -996,6 +1042,8 @@ try {
         Write-Host 'Cancelled - nothing was changed.'
         exit 1
     }
+
+    if (-not $restartOk) { throw 'Automatic installation requires Home Assistant Supervisor addon_restart capability. Manual restart targets are not supported by the current deployers; nothing was changed.' }
 
     # --- 8. configure + install -----------------------------------------------
     $script:Stage = 'configure-appdaemon'

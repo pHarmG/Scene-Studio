@@ -60,6 +60,10 @@ def _seed_fresh_target(state_dir: Path) -> None:
     addon = state_dir / "fs" / ADDON_ROOT.strip("/")
     addon.mkdir(parents=True, exist_ok=True)
     (addon / "appdaemon.yaml").write_text("appdaemon:\n  latitude: 0\n", encoding="utf-8")
+    config = state_dir / "fs/config"
+    config.mkdir(parents=True, exist_ok=True)
+    (config / "configuration.yaml").write_text("default_config:\n", encoding="utf-8")
+    (config / ".HA_VERSION").write_text("2026.9.10", encoding="utf-8")
     (state_dir / "apps_mode").write_text("registry_admin", encoding="utf-8")
 
 
@@ -113,6 +117,7 @@ class UiEnv:
             "store_root": "/config/scene_studio_store",
             "appdaemon_http_url": f"http://appdaemon.example.test:{self.ha_port}",
             "install_ha_card": True,
+    "ha_config_filesystem_confirmed": True,
             "providers": {
                 "ha_light": True,
                 "hue": {"enabled": False, "host": None, "bridge_id": None},
@@ -332,7 +337,7 @@ def test_ui_plan_fresh_install(ui_env):
     assert "store_root: /config/scene_studio_store" in block
     assert plan["apps_yaml_present"] is False
     labels = {row["label"] for row in plan["summary"]}
-    assert {"Home Assistant API", "AppDaemon (ssh)", "Scene Studio HTTP", "Runtime mode"} <= labels
+    assert {"Home Assistant API", "Filesystem access", "Scene Studio HTTP", "Runtime mode"} <= labels
     assert plan["block"].startswith("# Scene Studio")
 
 
