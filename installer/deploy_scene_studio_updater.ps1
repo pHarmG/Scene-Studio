@@ -51,18 +51,18 @@ $intent = $false
 try {
     $null = Remote "set -eu; test ! -e '$backup'; sudo install -d -m 750 '$backup'; sudo install -d -m 755 '$stage'"
     foreach ($name in $files.Keys) {
-        $null = Remote "set -eu; if test -f '$apps/$name'; then sudo cp -a '$apps/$name' '$backup/$name'; cmp '$apps/$name' '$backup/$name'; else sudo touch '$backup/$name.absent'; fi"
+        $null = Remote "set -eu; if test -f '$apps/$name'; then sudo cp -a '$apps/$name' '$backup/$name'; sudo cmp '$apps/$name' '$backup/$name'; else sudo touch '$backup/$name.absent'; fi"
         $encoded = [Convert]::ToBase64String([IO.File]::ReadAllBytes($files[$name]))
         $encoded | & ssh @sshArgs $HaHost "base64 -d | sudo tee '$stage/$name' > /dev/null"
         if ($LASTEXITCODE -ne 0) { throw 'Companion staging failed.' }
         $sha = (Get-FileHash -LiteralPath $files[$name] -Algorithm SHA256).Hash.ToLowerInvariant()
-        if ((Remote "sha256sum '$stage/$name' | cut -d ' ' -f1'").Trim() -ne $sha) { throw 'Companion staging hash mismatch.' }
+        if ((Remote "sudo sha256sum '$stage/$name' | cut -d ' ' -f1").Trim() -ne $sha) { throw 'Companion staging hash mismatch.' }
     }
     $intent = $true
     foreach ($name in $files.Keys) {
         $sha = (Get-FileHash -LiteralPath $files[$name] -Algorithm SHA256).Hash.ToLowerInvariant()
         $null = Remote "set -eu; sudo chown '$owner' '$stage/$name'; sudo chmod 644 '$stage/$name'; sudo mv '$stage/$name' '$apps/$name'"
-        if ((Remote "sha256sum '$apps/$name' | cut -d ' ' -f1'").Trim() -ne $sha) { throw 'Companion activation hash mismatch.' }
+        if ((Remote "sha256sum '$apps/$name' | cut -d ' ' -f1").Trim() -ne $sha) { throw 'Companion activation hash mismatch.' }
     }
     Restart-Addon
     $healthy = $false
@@ -78,12 +78,12 @@ try {
 } catch {
     if ($intent) {
         foreach ($name in $files.Keys) {
-            $null = Remote "set -eu; if test -f '$backup/$name'; then sudo cp -a '$backup/$name' '$apps/$name'; else sudo rm -f '$apps/$name'; fi"
+            $null = Remote "set -eu; if sudo test -f '$backup/$name'; then sudo cp -a '$backup/$name' '$apps/$name'; else sudo rm -f '$apps/$name'; fi"
         }
         Restart-Addon
         # Verify restored bytes/absence after restart. Keep backups regardless.
         foreach ($name in $files.Keys) {
-            $null = Remote "set -eu; if test -f '$backup/$name'; then cmp '$backup/$name' '$apps/$name'; else test ! -e '$apps/$name'; fi"
+            $null = Remote "set -eu; if sudo test -f '$backup/$name'; then sudo cmp '$backup/$name' '$apps/$name'; else test ! -e '$apps/$name'; fi"
         }
     }
     throw 'Companion provisioning failed; prior companion files restored when activation began. Backup retained.'
