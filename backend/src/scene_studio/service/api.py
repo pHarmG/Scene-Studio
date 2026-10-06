@@ -10,6 +10,8 @@ Route table (all paths prefixed ``/api/scene_studio``)::
     GET  /fixtures                  -> 200 {"fixtures": [...], "targets": [...]}
     GET  /fixture-state             -> 200 engine.sample_live_state() (read-only; no revision bump)
     GET  /scenes[?archived=true]    -> 200 {"scenes": [...]}
+    GET  /routines[?refresh=true]   -> 200 {"available", "routines": [...],
+                                            ...} (derived HA routine projection)
     GET  /discovery                 -> 200 {"report": <report|null>}
     GET  /diagnostics/recent?limit  -> 200 {"events": [...], "count": n}
     POST /command                   -> 200 <CommandResult dict>
@@ -66,6 +68,13 @@ def route(engine, method: str, path: str, body: dict | None = None, query: dict 
     if normalized_path == "/scenes" and normalized_method == "GET":
         archived = _flag(query, "archived")
         return 200, sanitize_tree(engine.scenes_catalog(archived=archived))
+
+    if normalized_path == "/routines" and normalized_method == "GET":
+        # Derived routine projection over HA's native automations
+        # (routines pass). `refresh=true` forces a HA re-read (mirrors the
+        # documented `?check_updates=true` explicit-refresh pattern);
+        # otherwise the engine's bounded TTL cache answers.
+        return 200, sanitize_tree(engine.routines_catalog(refresh=_flag(query, "refresh")))
 
     if normalized_path == "/discovery" and normalized_method == "GET":
         report = engine.latest_discovery()

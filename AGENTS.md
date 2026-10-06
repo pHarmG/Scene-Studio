@@ -34,6 +34,14 @@ Scene Studio implementation in Home-Tech.
   projection + command bridge (`sensor.scene_studio_ui`,
   `scene_studio_ui_command`). It never authors scenes and never touches
   providers directly.
+- **Scene routines** (routines pass): Home Assistant is the source of truth
+  for automation definitions; Scene Studio maintains a derived routine
+  projection (`domain/routines.py` + `service/routines.py`) and an
+  opinionated editor over its supported subset through the
+  `HaAutomationGateway` port (HA REST API only — never `automations.yaml`).
+  `routine.*` commands are normal-mode only and excluded from the HA card
+  bridge allowlist; edits verify-after-write and guard on `source_digest`
+  optimistic concurrency. See `docs/architecture/ARCHITECTURE_CONTRACTS.md` §11.
 - **Installer** (`installer/`): the only code that writes to a target
   Home Assistant/AppDaemon host. Deployers keep backup → stage → hash-verify
   → activate → health-check → rollback semantics; do not bypass them.

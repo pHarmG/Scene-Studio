@@ -42,12 +42,16 @@ ROUTE_COMMAND = {"method": "POST", "path": "/command"}
 
 
 def _legacy_event_names(registered):
-    """Registered event names EXCLUDING the always-on UI bridge listener
-    (HA card rework plan §4) — the assertion these tests care about is
-    "no LEGACY (APPLY_SCENE/DELETE_SCENE/...) listeners", not "no listeners
-    at all"; the new canonical UI bridge is intentionally registered in
-    every runtime mode (engine RuntimePolicy still gates what it can do)."""
-    return [name for kind, name in registered if kind == "event" and name != UI_COMMAND_EVENT]
+    """Registered event names EXCLUDING the always-on observational
+    listeners — the assertion these tests care about is "no LEGACY
+    (APPLY_SCENE/DELETE_SCENE/...) listeners", not "no listeners at all".
+    Always registered in every runtime mode (engine policy still gates what
+    they can do): the canonical UI bridge (HA card rework plan §4) and the
+    HA automation change/reload signals that invalidate the derived routine
+    cache (routines pass; bounded TTL + explicit refresh remain the
+    backstop, so these listeners carry no write capability)."""
+    always_on = {UI_COMMAND_EVENT, "automation_reloaded", "state_changed"}
+    return [name for kind, name in registered if kind == "event" and name not in always_on]
 
 MUTATING_COMMANDS = [
     "scene.apply",

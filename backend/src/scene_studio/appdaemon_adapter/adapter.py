@@ -100,6 +100,7 @@ from ..service.policy import (
 )
 from ..service.ports import DiscoveryFetchers, MonotonicClock, receipt
 from ..stores import SceneStudioStore
+from .ha_automation import RequestsHaAutomationGateway
 from .ui_bridge import (
     UI_COMMAND_EVENT,
     UI_PROJECTION_ENTITY,
@@ -988,6 +989,34 @@ def _int_list_arg(value) -> list[int] | None:
     return out
 
 
+def _resolve_ha_api_credentials(app) -> tuple[str | None, str | None]:
+    """Locate HA REST credentials for routine awareness (read-first).
+
+    Resolution order: the hass plugin's own configuration (``ha_url`` +
+    ``token``/``ha_key`` — what AppDaemon itself authenticates with), then
+    the HAOS/Supervised add-on environment (``SUPERVISOR_TOKEN`` against the
+    Supervisor's ``/core`` proxy). Credentials live in process memory only —
+    never in files, logs, or diagnostics. ``(None, None)`` means the
+    routine-awareness capability is honestly unavailable in this runtime;
+    there is no credential-free fallback.
+    """
+    try:
+        plugin_config = app.get_plugin_config() or {}
+    except Exception:
+        plugin_config = {}
+    if isinstance(plugin_config, dict):
+        base_url = plugin_config.get("ha_url") or plugin_config.get("haurl")
+        token = plugin_config.get("token") or plugin_config.get("ha_key")
+        if isinstance(base_url, str) and base_url.strip() and isinstance(token, str) and token.strip():
+            return base_url.strip(), token.strip()
+    import os
+
+    supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
+    if supervisor_token:
+        return "http://supervisor/core", supervisor_token
+    return None, None
+
+
 class _TransportError(Exception):
     """Malformed transport envelope; carries an HTTP-style status + error code."""
 
@@ -1156,6 +1185,24 @@ class SceneStudioApp(_appdaemon_base()):
             "wled_instance_ids": _int_list_arg(args.get("hyperhdr_wled_instance_ids")),
             "hue_instance_ids": _int_list_arg(args.get("hyperhdr_hue_instance_ids")),
         }
+        # HA-native routine awareness (routines pass): a REST gateway over
+        # HA's own automation API. Without resolvable credentials the
+        # gateway reports itself unavailable and routine awareness stays
+        # honestly disabled — never a YAML fallback.
+        self._automation_gateway = None
+        try:
+            ha_base_url, ha_token = _resolve_ha_api_credentials(self)
+            self._automation_gateway = RequestsHaAutomationGateway(
+                base_url=ha_base_url,
+                token=ha_token,
+            )
+            if not self._automation_gateway.available():
+                self.log(
+                    "Scene Studio routine awareness unavailable: "
+                    f"{self._automation_gateway.unavailable_reason()}"
+                )
+        except Exception as exc:
+            self.error(f"routine gateway construction failed: {type(exc).__name__}: {exc}")
         self._engine = SceneStudioEngine(
             store=SceneStudioStore(store_root),
             executor=RequestsProviderExecutor(
@@ -1183,6 +1230,7 @@ class SceneStudioApp(_appdaemon_base()):
             policy=RuntimePolicy.build(mode),
             hyperhdr_probe=hyperhdr_probe,
             contention_config=contention_config,
+            automation_gateway=self._automation_gateway,
         )
         if mode == MODE_NORMAL:
             # Contention heartbeat (external owner grab/surrender transitions,
@@ -1255,6 +1303,13 @@ class SceneStudioApp(_appdaemon_base()):
         self._last_projected_revision = None
         self._last_ui_command = None
         self.listen_event(self._on_ui_command, UI_COMMAND_EVENT)
+        # HA change/reload signals invalidate the derived routine cache
+        # (routines pass). The bounded TTL + explicit `GET /routines?
+        # refresh=true` remain the backstop: no single HA event is assumed
+        # perfectly reliable. `state_changed` fires for every entity — the
+        # callback is a cheap prefix guard, not a re-read.
+        self.listen_event(self._on_automation_signal, "automation_reloaded")
+        self.listen_event(self._on_automation_signal, "state_changed")
         self._publish_projection(force=True)
         self.log(
             f"SceneStudioApp initialized (store_root={store_root}, mode={mode}, "
@@ -1301,6 +1356,24 @@ class SceneStudioApp(_appdaemon_base()):
                 self.log(f"cleared stale WLED segment freezes: {result['cleared_segment_ids']}")
         except Exception as exc:
             self.error(f"wled freeze reconcile failed: {type(exc).__name__}: {exc}")
+
+    def _on_automation_signal(self, event_name, data, kwargs) -> None:
+        """HA automation change signal -> drop the derived routine cache.
+
+        Handles ``automation_reloaded`` (config reload / UI edits) and
+        ``state_changed`` narrowed to ``automation.*`` entities (enable/
+        disable and availability flips). Listeners must never break the
+        daemon, and a missed signal is survivable by design: the bounded
+        TTL and explicit refresh re-read HA regardless.
+        """
+        try:
+            if event_name == "state_changed":
+                entity_id = (data or {}).get("entity_id")
+                if not isinstance(entity_id, str) or not entity_id.startswith("automation."):
+                    return
+            self._engine.invalidate_routines()
+        except Exception as exc:
+            self.error(f"automation signal handling failed: {type(exc).__name__}: {exc}")
 
     def _on_legacy_event(self, event_name, data, kwargs) -> None:
         mapper = LEGACY_EVENT_MAPPERS.get(event_name)

@@ -128,6 +128,7 @@ from ..domain.fixtures import (
 from ..domain.palette_resolve import canonicalize_static_palette
 from ..domain.reconcile import proposed_reconcile_revision
 from ..domain.identities import normalize_name_to_id, validate_id
+from ..domain.routines import HaAutomationIdError
 from ..domain.playback import (
     FixtureExecution,
     PlaybackSession,
@@ -141,6 +142,14 @@ from ..domain.serde import ValidationError, join, reject_unknown_keys, require_b
 from .contention import ContentionService
 from .playback_realization import HueManagedSceneStore, PlaybackRealizer
 from .policy import RuntimePolicy
+from .ports import Clock, DiscoveryFetchers, HaAutomationGateway, ProviderExecutor, receipt
+from .routines import (
+    RoutineCapabilityUnavailable,
+    RoutineNotEditable,
+    RoutineService,
+    RoutineSourceChanged,
+    RoutineVerificationFailed,
+)
 from ..discovery import (
     build_halight_observations,
     build_hue_observations,
@@ -190,6 +199,7 @@ class SceneStudioEngine:
         policy: RuntimePolicy | None = None,
         hyperhdr_probe=None,
         contention_config: dict | None = None,
+        automation_gateway: HaAutomationGateway | None = None,
     ) -> None:
         self._store = store
         self._policy = policy or RuntimePolicy.build()
@@ -240,6 +250,15 @@ class SceneStudioEngine:
         # playback sessions so pause/stop can still realize providers
         # without writing the draft into the catalog.
         self._ephemeral_scenes: dict[str, Scene] = {}
+        # HA-native routine awareness (routines pass): derived projection +
+        # constrained native-automation CRUD through the injected gateway.
+        # A None gateway reports the capability honestly unavailable; the
+        # projection cache is TTL-bounded, never a second routine database.
+        self._routines = RoutineService(
+            automation_gateway,
+            clock.now_iso,
+            emit=self.emit,
+        )
         self._handlers = {
             "scene.apply": self._apply,
             "scene.preview": self._apply,  # forced dry-run inside
@@ -274,6 +293,11 @@ class SceneStudioEngine:
             "registry.migrate": self._registry_migrate,
             "discovery.run": self._discovery_run,
             "diagnostics.export": self._diagnostics_export,
+            "routine.create": self._routine_create,
+            "routine.update": self._routine_update,
+            "routine.delete": self._routine_delete,
+            "routine.enable": self._routine_enable,
+            "routine.disable": self._routine_disable,
         }
 
     # ------------------------------------------------------------------
@@ -611,6 +635,24 @@ class SceneStudioEngine:
             return [fixture.id for fixture in self._store.resolve_target(target_id)]
         except (NotFoundError, ValidationError, ValueError):
             return []
+
+    # -- HA-native routine awareness (routines pass) -----------------------
+
+    def routines_catalog(self, *, refresh: bool = False) -> dict:
+        """Derived HA routine projection for the read route (GET /routines).
+
+        Bounded-TTL cache over HA's canonical automations; ``refresh=True``
+        forces a re-read. Never mutates HA, never holds the mutation lock
+        (HA reads run through the gateway outside it), and honestly reports
+        ``available: false`` when no automation gateway is configured.
+        """
+        return self._routines.catalog(refresh=refresh)
+
+    def invalidate_routines(self) -> None:
+        """Drop the derived routine cache (HA signalled an automation
+        change via the adapter's reload/state listeners). The next catalog
+        read re-projects from HA."""
+        self._routines.invalidate()
 
     # ------------------------------------------------------------------
     # events
@@ -2967,6 +3009,146 @@ class SceneStudioEngine:
         if params.redact:
             snapshot = sanitize_tree(snapshot)
         return success(envelope.command, snapshot, envelope.request_id)
+
+    # -- HA-native routine CRUD (routines pass) ------------------------------
+
+    def _routine_scene_lookup(self, scene_id: str) -> tuple[str, bool] | None:
+        """``scene_id -> (name, motion_is_dynamic)`` for routine validation.
+        Returns None for unknown scenes (active catalog only)."""
+        try:
+            scene = self._store.scenes.get_scene(scene_id)
+        except NotFoundError:
+            return None
+        return (scene.name, scene.motion.mode is not MotionMode.STATIC)
+
+    def _routine_mutation(self, envelope: CommandEnvelope, operation) -> CommandResult:
+        """Shared wrapper: run one RoutineService mutation and map its typed
+        failures onto honest CommandResults. Success bumps the engine
+        revision so every surface (Workbench polling, HA projection)
+        notices the external-state change."""
+        try:
+            data = operation(self._routines)
+        except RoutineCapabilityUnavailable as exc:
+            return failure(
+                envelope.command,
+                ErrorCode.PROVIDER_UNAVAILABLE,
+                str(exc),
+                details={"capability": "ha_automation_management"},
+                request_id=envelope.request_id,
+            )
+        except RoutineSourceChanged as exc:
+            return failure(
+                envelope.command,
+                ErrorCode.CONFLICT,
+                "Home Assistant changed this automation since it was loaded; "
+                "refresh the routines and reapply your edit.",
+                details={
+                    "kind": "routine_source_changed",
+                    "automation_id": exc.automation_id,
+                    "current_digest": exc.current_digest,
+                },
+                request_id=envelope.request_id,
+            )
+        except RoutineNotEditable as exc:
+            return failure(
+                envelope.command,
+                ErrorCode.CONFLICT,
+                str(exc),
+                details={
+                    "kind": "routine_advanced",
+                    "automation_id": exc.automation_id,
+                    "unsupported_reasons": exc.reasons,
+                },
+                request_id=envelope.request_id,
+            )
+        except RoutineVerificationFailed as exc:
+            return failure(
+                envelope.command,
+                ErrorCode.INTERNAL_ERROR,
+                str(exc),
+                details={"kind": "routine_verification_failed"},
+                request_id=envelope.request_id,
+            )
+        except KeyError as exc:
+            scene_id = exc.args[0] if exc.args else ""
+            return failure(
+                envelope.command,
+                ErrorCode.NOT_FOUND,
+                f"scene {str(scene_id)!r} was not found",
+                request_id=envelope.request_id,
+            )
+        except ValueError as exc:
+            # e.g. behavior=play against a static scene
+            return failure(
+                envelope.command,
+                ErrorCode.VALIDATION_ERROR,
+                str(exc),
+                request_id=envelope.request_id,
+            )
+        except HaAutomationIdError as exc:
+            return failure(
+                envelope.command,
+                ErrorCode.VALIDATION_ERROR,
+                str(exc),
+                request_id=envelope.request_id,
+            )
+        self._touch()
+        return success(envelope.command, data, envelope.request_id)
+
+    def _routine_create(self, envelope: CommandEnvelope, params) -> CommandResult:
+        return self._routine_mutation(
+            envelope,
+            lambda service: service.create(
+                scene_id=params.scene_id,
+                behavior=params.behavior,
+                time_hhmm=params.time,
+                weekdays=params.weekdays,
+                scene_lookup=self._routine_scene_lookup,
+            ),
+        )
+
+    def _routine_update(self, envelope: CommandEnvelope, params) -> CommandResult:
+        return self._routine_mutation(
+            envelope,
+            lambda service: service.update(
+                automation_id=params.automation_id,
+                source_digest=params.source_digest,
+                time_hhmm=params.time,
+                weekdays=params.weekdays,
+                behavior=params.behavior,
+                scene_id=params.scene_id,
+                scene_lookup=self._routine_scene_lookup,
+            ),
+        )
+
+    def _routine_delete(self, envelope: CommandEnvelope, params) -> CommandResult:
+        return self._routine_mutation(
+            envelope,
+            lambda service: service.delete(
+                automation_id=params.automation_id,
+                source_digest=params.source_digest,
+            ),
+        )
+
+    def _routine_enable(self, envelope: CommandEnvelope, params) -> CommandResult:
+        return self._routine_mutation(
+            envelope,
+            lambda service: service.set_enabled(
+                automation_id=params.automation_id,
+                source_digest=params.source_digest,
+                enabled=True,
+            ),
+        )
+
+    def _routine_disable(self, envelope: CommandEnvelope, params) -> CommandResult:
+        return self._routine_mutation(
+            envelope,
+            lambda service: service.set_enabled(
+                automation_id=params.automation_id,
+                source_digest=params.source_digest,
+                enabled=False,
+            ),
+        )
 
     # ------------------------------------------------------------------
     # shared helpers

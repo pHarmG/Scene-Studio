@@ -309,6 +309,11 @@ export function createStore(client) {
     // on its own view-aware cadence (see #syncLiveStateSampling below). One
     // atomic snapshot per sampling cycle, never a per-fixture trickle.
     fixtureLiveState: { byId: {}, sampledAt: null, providers: {}, loading: false },
+    // Derived HA routine projection (routines pass, GET /routines):
+    // {available, unavailable_reason?, routines:[RoutineProjection], ...}.
+    // Home Assistant is canonical; this is a read-only derived view plus the
+    // handle for the scene-row routine editor's commands.
+    routines: null,
   };
 
   const subscribers = new Set();
@@ -324,14 +329,18 @@ export function createStore(client) {
    * different generations (Lit schedules renders as microtasks).
    */
   const fetchAll = async () => {
-    const [status, fixtures, scenes, discovery, eventsRes] = await Promise.all([
+    const [status, fixtures, scenes, discovery, eventsRes, routines] = await Promise.all([
       Promise.resolve(active.getStatus()),
       active.getFixtures(),
       active.getScenes(),
       active.getDiscovery(),
       active.getRecentEvents(200),
+      // Routine awareness (routines pass): a transport failure here (or an
+      // older backend without the route) must never break the catalog
+      // fetch — a null result keeps the last-known projection committed.
+      active.getRoutines ? active.getRoutines().catch(() => null) : Promise.resolve(null),
     ]);
-    return { status, fixtures, scenes, discovery, events: eventsRes.events };
+    return { status, fixtures, scenes, discovery, events: eventsRes.events, routines };
   };
 
   const refresh = async () => {
@@ -341,6 +350,7 @@ export function createStore(client) {
     state.scenes = fresh.scenes;
     state.discovery = fresh.discovery;
     state.events = fresh.events;
+    if (fresh.routines !== null) state.routines = fresh.routines;
     if (state.conn.mode === "live") {
       state.conn.status = "ok";
       state.conn.error = null;
@@ -992,6 +1002,7 @@ export function createStore(client) {
       state.sceneFidelity = {};
       state.sceneFidelityRevision = null;
       pendingFidelityForce = false;
+      state.routines = null;
       state.builder = null;
       state.builderExit = null;
       await refresh();
@@ -1021,6 +1032,7 @@ export function createStore(client) {
         state.sceneFidelity = {};
         state.sceneFidelityRevision = null;
         pendingFidelityForce = false;
+        state.routines = null;
         state.builder = null;
         state.builderExit = null;
         notify();
@@ -1047,6 +1059,7 @@ export function createStore(client) {
       state.sceneFidelity = {};
       state.sceneFidelityRevision = null;
       pendingFidelityForce = false;
+      state.routines = null;
       state.builder = null;
       state.builderExit = null;
       state.scenarioId = mockClient.getScenario();
@@ -1085,6 +1098,7 @@ export function createStore(client) {
         state.scenes = fresh.scenes;
         state.discovery = fresh.discovery;
         state.events = fresh.events;
+        if (fresh.routines !== null) state.routines = fresh.routines;
       } else {
         state.status = status;
       }
@@ -1157,6 +1171,14 @@ export function createStore(client) {
           // The message already carries the yield/takeover guidance; keep
           // it readable instead of the generic failure echo.
           notify_(`${envelope.command}: ${res.error.message}`, "warn");
+        } else if (
+          res.error && res.error.code === "conflict" &&
+          res.error.details && res.error.details.kind === "routine_source_changed"
+        ) {
+          // HA-native routine concurrency (routines pass): the message is
+          // user-complete on its own; warn-toned so the popover can prompt
+          // a refresh rather than a retry.
+          notify_(res.error.message, "warn");
         } else {
           notify_(`${envelope.command} failed: ${res.error ? res.error.message : "unknown error"}`, "err");
         }
@@ -1173,6 +1195,19 @@ export function createStore(client) {
 
     isDismissed(key) {
       return !!state.dismissed[key];
+    },
+
+    /** Routines attached to one scene, sorted by time (routines pass).
+     *  Includes native + advanced projections; [] when unavailable. */
+    routinesForScene(sceneId) {
+      const all = (state.routines && state.routines.routines) || [];
+      return all
+        .filter((routine) => routine.scene_id === sceneId)
+        .sort((a, b) => {
+          const at = a.schedule ? a.schedule.time : "99:99";
+          const bt = b.schedule ? b.schedule.time : "99:99";
+          return at < bt ? -1 : at > bt ? 1 : a.automation_id < b.automation_id ? -1 : 1;
+        });
     },
 
     notify: notify_,
@@ -1215,6 +1250,20 @@ export function playbackActionEnvelope(action, sessionId) {
  */
 function commandNoticeText(envelope, res, state) {
   const d = res.data || {};
+  // HA-native routine commands (routines pass): the backend event summary
+  // already names the scene/schedule; mirror it in the notice bar.
+  if (envelope.command.startsWith("routine.")) {
+    const routine = d.routine || null;
+    if (envelope.command === "routine.delete") return "Routine removed from Home Assistant";
+    if (envelope.command === "routine.enable" && routine) return `Routine enabled: ${routine.alias}`;
+    if (envelope.command === "routine.disable" && routine) return `Routine disabled: ${routine.alias}`;
+    if (routine) {
+      const schedule = routine.schedule || { weekdays: null, time: "" };
+      const days = schedule.weekdays ? schedule.weekdays.join(", ") : "Daily";
+      return `Scheduled "${routine.alias || "routine"}" — ${days} ${schedule.time} (${routine.behavior === "play" ? "plays" : "applies"} automatically)`;
+    }
+    return "Routine updated";
+  }
   // mock results carry `applied`; the engine carries `scene_name`
   if (envelope.command === "scene.apply" && (d.applied || d.scene_name)) {
     const failed = (d.receipts || []).filter((r) => r && r.ok === false);

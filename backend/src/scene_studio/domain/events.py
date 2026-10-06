@@ -33,6 +33,7 @@ class EventCategory(str, Enum):
     PLAYBACK = "playback"
     FIXTURE = "fixture"
     DISCOVERY = "discovery"
+    AUTOMATION = "automation"
     SYSTEM = "system"
 
 

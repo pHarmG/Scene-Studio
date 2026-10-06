@@ -26,6 +26,13 @@ Modes:
 The dry-run exception is encoded as the sentinel entry
 ``"scene.apply:dry_run"``: it grants dry-run ``scene.apply`` without
 granting real execution.
+
+Routine commands (``routine.create/update/delete/enable/disable`` — native
+HA automation CRUD, routines pass) are intentionally absent from every
+restricted set: normal mode derives them from the command catalog, while
+``read_only`` (observational) and ``registry_admin`` (external-system
+writes blocked, exactly like provider writes) reject them. The HA card's
+UI bridge allowlist independently excludes them forever.
 """
 
 from __future__ import annotations

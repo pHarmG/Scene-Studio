@@ -173,6 +173,34 @@ export class SsViewScenes extends SsLightElement {
     this.store.select({ type: "scene", id: e.detail.id });
   }
 
+  /**
+   * HA-native routine commands (routines pass) from a row's
+   * <ss-routine-popover>, forwarded through the ONE store command seam.
+   * The backend owns every write; a `routine_source_changed` conflict is
+   * already surfaced by the store as a warn notice telling the user to
+   * refresh and reapply.
+   */
+  #onRoutineAction(e) {
+    const { action, scene_id, automation_id, source_digest, time, weekdays, behavior } = e.detail;
+    const store = this.store;
+    switch (action) {
+      case "create":
+        return store.sendCommand({ command: "routine.create", scene_id, behavior, time, weekdays });
+      case "update":
+        return store.sendCommand({
+          command: "routine.update", automation_id, source_digest, time, weekdays, behavior,
+        });
+      case "delete":
+        return store.sendCommand({ command: "routine.delete", automation_id, source_digest });
+      case "enable":
+        return store.sendCommand({ command: "routine.enable", automation_id, source_digest });
+      case "disable":
+        return store.sendCommand({ command: "routine.disable", automation_id, source_digest });
+      default:
+        return Promise.resolve();
+    }
+  }
+
   #onAction(e) {
     const { action, scene_id, name, session_id } = e.detail;
     const store = this.store;
@@ -267,7 +295,7 @@ export class SsViewScenes extends SsLightElement {
     if (panel) panel.scrollIntoView({ block: "nearest" });
   }
 
-  #renderRow(scene, { archived, st, current, playback, sel }) {
+  #renderRow(scene, { archived, st, current, playback, sel, routineDoc }) {
     const contention = st ? st.contention : null;
     return html`
       <ss-scene-row
@@ -280,8 +308,12 @@ export class SsViewScenes extends SsLightElement {
         .sessionSummary=${this.#sessionSummary(playback, scene.id)}
         .selected=${!!sel && sel.type === "scene" && sel.id === scene.id}
         .contentionActive=${!!contention && (contention.held_fixture_ids || []).length > 0}
+        .routines=${this.store.routinesForScene(scene.id)}
+        .routinesAvailable=${routineDoc ? !!routineDoc.available : false}
+        .routinesReason=${routineDoc && routineDoc.unavailable_reason ? routineDoc.unavailable_reason : null}
         @select-scene=${this.#onSelect}
         @scene-action=${this.#onAction}
+        @routine-action=${this.#onRoutineAction}
       ></ss-scene-row>
     `;
   }
@@ -307,6 +339,9 @@ export class SsViewScenes extends SsLightElement {
     const highlightSessionId = sel && sel.type === "playback" ? sel.id : "";
     const highlightSceneId =
       !highlightSessionId && this._panelHighlightSceneId ? this._panelHighlightSceneId : "";
+    // Derived HA routine projection (routines pass) — read-only view data
+    // passed through to each row's schedule popover.
+    const routineDoc = s.routines;
     return html`
       <!-- Same cockpit header as Overview, always present (idle included)
            so the page layout does not jump when playback starts/stops. -->
@@ -346,7 +381,7 @@ export class SsViewScenes extends SsLightElement {
         </button>
       </div>
       <ss-panel variant="list" role="list">
-        ${activeScenes.map((scene) => this.#renderRow(scene, { archived: false, st, current, playback, sel }))}
+        ${activeScenes.map((scene) => this.#renderRow(scene, { archived: false, st, current, playback, sel, routineDoc }))}
       </ss-panel>
       ${archivedScenes.length
         ? html`
@@ -356,7 +391,7 @@ export class SsViewScenes extends SsLightElement {
                 Archived (${archivedScenes.length})
               </summary>
               <ss-panel variant="list" role="list">
-                ${archivedScenes.map((scene) => this.#renderRow(scene, { archived: true, st, current, playback, sel }))}
+                ${archivedScenes.map((scene) => this.#renderRow(scene, { archived: true, st, current, playback, sel, routineDoc }))}
               </ss-panel>
             </details>
           `

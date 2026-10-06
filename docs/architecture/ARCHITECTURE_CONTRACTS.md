@@ -1,6 +1,6 @@
 # Scene Studio — Architecture Contracts (Phase 1)
 
-Status: **current** — R5 model plus HA unification canonical bridge (`sensor.scene_studio_ui` schema v2)
+Status: **current** — R5 model, HA unification canonical bridge (`sensor.scene_studio_ui` schema v3), and HA-native scene routines (§11)
 Created: 2026-09-10
 Code: `services/scene_studio/` (pure Python, stdlib only, pytest)
 Sample data: `services/scene_studio/fixtures/*.sample.json`
@@ -91,7 +91,9 @@ Applying `scene.apply {scene_id, target_id?}` resolves as:
   `fixture.reconcile_preview`, `fixture.reconcile`,
   `fixture.adopt`, `target.create`, `target.update`,
   `registry.migration_preview`, `registry.migrate`,
-  `discovery.run`, `diagnostics.export`. Adding commands: extend
+  `discovery.run`, `diagnostics.export`, `routine.create`, `routine.update`,
+  `routine.delete`, `routine.enable`, `routine.disable` (§11). Adding
+  commands: extend
   `COMMAND_CATALOG` with a params dataclass; never overload existing param
   meanings.
 - **First-run bootstrap (portability pass)** — `fixture.adopt
@@ -450,3 +452,83 @@ Read-only membership drift lives on `diagnostics.export` as
 `membership_drift` (and the production preflight). Flags: room mismatch,
 aggregate helper modeled as fixture, incomplete HA coverage, duplicate HA
 entity, empty/stale Scene Studio target.
+
+## 11. HA-native scene routines (routines pass)
+
+**Canonical rule: Home Assistant is the source of truth for automation
+definitions. Scene Studio maintains a DERIVED routine projection and an
+opinionated editor over its supported subset — never a second automation
+database, never direct `automations.yaml` editing.** A HA-created compatible
+routine appears in Scene Studio; a Scene Studio-created routine is an
+ordinary HA automation; HA-side rename/edit/delete is detected; supported
+edits round-trip; unsupported structural edits move the routine to
+`recognized_advanced` (visible, readable, read-only) instead of being lost.
+
+- **Domain projection** (`domain/routines.py`, transport-free): classifies
+  each HA automation into `native_routine` (fully inside the supported
+  grammar), `recognized_advanced` (references Scene Studio but exceeds the
+  grammar — still projected with what is safely readable, plus
+  `unsupported_reasons`), or nothing (no Scene Studio bridge reference —
+  not a routine, ignored). Recognition is STRUCTURAL (it matches the
+  canonical `scene_studio_ui_command` bridge event shape), never
+  provenance-based; the versioned description marker
+  (`Scene Studio routine (schema N)`) is informative only.
+- **Supported grammar**: exactly one `time` trigger (literal whole-minute
+  `at`; `sun.*`, templates, multiple triggers → advanced), no conditions or
+  one `time` condition with an optional weekday selection (mon..sun;
+  `holiday` → advanced), exactly one action firing the canonical bridge
+  event (`event_data` = exactly `command` ∈ {`scene.apply`,
+  `playback.start`} + `scene_id`; extra keys → advanced), benign
+  automation-level keys only (id/alias/description/mode/initial_state/icon;
+  `variables`, blueprints, `choose`/`repeat`, scripts → advanced). One
+  Scene Studio scene action per routine; behavior = Apply or Play
+  dynamically (Play requires a dynamic scene and is refused for static
+  scenes at the command gate).
+- **Gateway port** (`service/ports.HaAutomationGateway`): the ONLY HA
+  contact for routines — HA's supported REST surface (config
+  read/upsert/delete, `automation.*` entity states, `automation/reload`,
+  `automation/turn_on`/`turn_off`). Implemented by
+  `appdaemon_adapter/ha_automation.py` (credentials from the hass plugin
+  config, else the add-on `SUPERVISOR_TOKEN`; tokens stay in process
+  memory). Without resolvable credentials the capability reports
+  `available: false` honestly — there is deliberately NO YAML fallback.
+- **Routine service** (`service/routines.py`): TTL-bounded (30 s) derived
+  projection cache — explicitly NOT a second persistence layer. Invalidation
+  is layered: HA `automation_reloaded` / `automation.*` state-change
+  signals (adapter listeners), TTL expiry, and explicit
+  `GET /routines?refresh=true`; no single HA event is assumed reliable.
+- **CRUD commands**: `routine.create`, `routine.update`, `routine.delete`,
+  `routine.enable`, `routine.disable` (normal mode only — restricted modes
+  reject external-system writes exactly like provider writes; the HA card
+  bridge allowlist excludes them forever). Generated automations are
+  ordinary HA automations: stable unique `ssr_*` config id, human alias
+  (`Scene Studio · <scene> · <recurrence> <time>`), the versioned
+  provenance description, and the existing bridge event as the sole
+  execution path. **Verify-after-write**: every mutation re-reads HA's
+  canonical config/state and verifies the expected outcome before
+  reporting success (a create that fails verification is rolled back).
+- **Optimistic concurrency**: the projection carries a normalized
+  `source_digest` of the raw HA config (volatile `trace`/`source` keys
+  excluded). Every update/delete/enable/disable re-fetches immediately
+  before writing and compares digests; a mismatch is a structured conflict
+  (`error.details.kind = "routine_source_changed"` with the current
+  digest) — never an overwrite. Advanced automations are refused with
+  `kind = "routine_advanced"`.
+- **HTTP surface**: `GET /routines` (sanitize_tree'd, TTL-cached;
+  `?refresh=true` forces a HA re-read) returns
+  `{available, unavailable_reason?, routines: [RoutineProjection],
+  refreshed_at, stale}`.
+- **Workbench**: no new navigation section. The scene row carries a
+  compact temporal chip (`<ss-routine-popover>` in the row name cell):
+  clock affordance when unscheduled, `Weekdays 7:30 PM` for one routine,
+  `N routines` for several; the anchored top-layer popover edits only the
+  supported grammar (time, days, Apply/Play offered dynamically by scene
+  motion, enable/disable, delete with two-step confirm) and shows advanced
+  automations read-only, labeled Home-Assistant-managed. Archived rows
+  render no routine affordance.
+- **Explicitly deferred** (do not invent silently): generic HA automation
+  authoring, arbitrary triggers/conditions, sunrise/sunset grammar,
+  interpreting arbitrary light-service actions as scenes, scheduled
+  dynamic stop (needs new semantics such as
+  `playback.stop_matching {scene_id, target_id?}` — follow-up work), HA
+  card routine authoring, playback lifecycle redesign.

@@ -75,6 +75,7 @@ import {
 } from "../src/grouping.js";
 import { canonicalizeStaticPalette, resolveClusterPalette, resolveFixturePalette } from "../src/palette_assign.js";
 import { sceneLookSwatches } from "../src/scene_look.js";
+import { routineRowSummary, describeRoutineSchedule, formatRoutineTime12h } from "../src/routines.js";
 import { buildInspectorDescriptor, buildOverviewExceptions } from "../src/inspector.js";
 import { auraBackground } from "../src/components/aura.js";
 import {
@@ -2536,6 +2537,114 @@ async function main() {
         error: stalePreviewStore.state.builder.previewError,
       })
     );
+  }
+
+
+  // --- HA-native routine awareness + CRUD (routines pass) ----------------
+  console.log("\n== HA-native routines (mock contract) ==");
+  {
+    const client = createMockSceneStudioClient(baseData, { scenarioId: "all-healthy" });
+
+    // getRoutines shape + deterministic seeds
+    const doc = await client.getRoutines();
+    check("routines: available capability doc", doc && doc.available === true && Array.isArray(doc.routines));
+    const seeded = doc.routines;
+    const twilightRoutine = seeded.find((r) => r.scene_id === "twilight" && r.classification === "native_routine");
+    const auroraRoutine = seeded.find((r) => r.scene_id === "aurora_flow" && r.behavior === "play" && r.classification === "native_routine");
+    const auroraAdvanced = seeded.find((r) => r.scene_id === "aurora_flow" && r.classification === "recognized_advanced");
+    check("routines: static scene seeded with a native weekday Apply routine", !!twilightRoutine && twilightRoutine.behavior === "apply" && twilightRoutine.schedule.weekdays.join(",") === "mon,tue,wed,thu,fri", JSON.stringify(twilightRoutine));
+    check("routines: dynamic scene seeded with a native daily Play routine", !!auroraRoutine && auroraRoutine.schedule.weekdays === null, JSON.stringify(auroraRoutine));
+    check("routines: advanced routine present, read-only shape", !!auroraAdvanced && Array.isArray(auroraAdvanced.unsupported_reasons) && auroraAdvanced.unsupported_reasons.length > 0 && auroraAdvanced.schedule === null);
+    check("routines: projections carry the concurrency digest + provenance", seeded.every((r) => typeof r.source_digest === "string" && r.source_digest.length > 0));
+
+    // row summary helper (progressive disclosure contract)
+    check("routine row summary: none -> bare affordance", deepEqual(routineRowSummary([]), { count: 0, text: "", hasAdvanced: false, allDisabled: false }));
+    check("routine row summary: one -> concise recurrence + time", routineRowSummary([twilightRoutine]).text === "Weekdays 7:30 PM");
+    check("routine row summary: several -> count text", routineRowSummary(seeded.filter((r) => r.scene_id === "aurora_flow")).text === "2 routines");
+    check("routine row summary: advanced presence flagged", routineRowSummary([auroraAdvanced]).hasAdvanced === true);
+    check("routine row summary: null -> not loaded", routineRowSummary(null) === null);
+
+    // param validation mirrors the backend catalog
+    const badTime = await client.sendCommand({ command: "routine.create", scene_id: "twilight", behavior: "apply", time: "19:60" });
+    check("routine.create: invalid time rejected", badTime.ok === false && badTime.error.code === "validation_error");
+    const badBehavior = await client.sendCommand({ command: "routine.create", scene_id: "twilight", behavior: "toggle", time: "19:30" });
+    check("routine.create: invalid behavior rejected", badBehavior.ok === false && badBehavior.error.code === "validation_error");
+    const playStatic = await client.sendCommand({ command: "routine.create", scene_id: "twilight", behavior: "play", time: "19:30" });
+    check("routine.create: play refused for a static scene", playStatic.ok === false && playStatic.error.code === "validation_error" && /static/.test(playStatic.error.message));
+    const unknownScene = await client.sendCommand({ command: "routine.create", scene_id: "ghost", behavior: "apply", time: "19:30" });
+    check("routine.create: unknown scene is not_found", unknownScene.ok === false && unknownScene.error.code === "not_found");
+    const unknownParam = await client.sendCommand({ command: "routine.create", scene_id: "twilight", behavior: "apply", time: "19:30", trigger: "x" });
+    check("routine.create: unknown param rejected", unknownParam.ok === false && unknownParam.error.code === "validation_error");
+
+    // create -> projection + alias shape
+    const created = await client.sendCommand({
+      command: "routine.create", scene_id: "meeting_blue", behavior: "apply", time: "08:15", weekdays: ["sat"], request_id: "req-routine-create",
+    });
+    check("routine.create: ok with request_id echo", created.ok === true && created.request_id === "req-routine-create", JSON.stringify(created));
+    check("routine.create: native classification + alias shape", created.data.routine.classification === "native_routine" && created.data.routine.alias === "Scene Studio · Meeting Blue · Saturdays 8:15 AM", created.data.routine && created.data.routine.alias);
+    const afterCreate = await client.getRoutines();
+    check("routine.create: appears in the projection", afterCreate.routines.some((r) => r.automation_id === created.data.routine.automation_id));
+    check("routine.create: automation event recorded", (await client.getRecentEvents(20)).events.some((e) => e.category === "automation" && /Scheduled/.test(e.summary)));
+
+    // optimistic concurrency: stale digest -> structured conflict, no overwrite
+    const stale = await client.sendCommand({
+      command: "routine.update", automation_id: created.data.routine.automation_id, source_digest: "stale-digest", time: "09:00",
+    });
+    check("routine.update: stale digest -> structured routine_source_changed conflict", stale.ok === false && stale.error.code === "conflict" && stale.error.details.kind === "routine_source_changed" && typeof stale.error.details.current_digest === "string");
+    const roundTrip = await client.sendCommand({
+      command: "routine.update", automation_id: created.data.routine.automation_id,
+      source_digest: created.data.routine.source_digest, time: "06:00", weekdays: null, behavior: "apply",
+    });
+    check("routine.update: happy path round-trips grammar fields", roundTrip.ok === true && roundTrip.data.routine.schedule.time === "06:00" && roundTrip.data.routine.schedule.weekdays === null);
+    check("routine.update: digest moved with the edit", roundTrip.data.routine.source_digest !== created.data.routine.source_digest);
+
+    // enable/disable round trip carries the fresh digest
+    const disabled = await client.sendCommand({
+      command: "routine.disable", automation_id: roundTrip.data.routine.automation_id, source_digest: roundTrip.data.routine.source_digest,
+    });
+    check("routine.disable: ok, enabled=false", disabled.ok === true && disabled.data.routine.enabled === false);
+    const enabled = await client.sendCommand({
+      command: "routine.enable", automation_id: roundTrip.data.routine.automation_id, source_digest: disabled.data.routine.source_digest,
+    });
+    check("routine.enable: ok, enabled=true", enabled.ok === true && enabled.data.routine.enabled === true);
+
+    // delete + post-delete semantics match the backend (missing config -> conflict)
+    const deleted = await client.sendCommand({
+      command: "routine.delete", automation_id: roundTrip.data.routine.automation_id, source_digest: enabled.data.routine.source_digest,
+    });
+    check("routine.delete: ok with removed=true", deleted.ok === true && deleted.data.removed === true);
+    const gone = await client.sendCommand({
+      command: "routine.update", automation_id: roundTrip.data.routine.automation_id, source_digest: enabled.data.routine.source_digest, time: "10:00",
+    });
+    check("routine.update: deleted automation reads as a source-changed conflict (HA canonical)", gone.ok === false && gone.error.code === "conflict" && gone.error.details.kind === "routine_source_changed");
+
+    // advanced routines are visible but never editable through Scene Studio
+    for (const [label, command, extra] of [
+      ["update", "routine.update", { time: "09:00" }],
+      ["delete", "routine.delete", {}],
+      ["disable", "routine.disable", {}],
+    ]) {
+      const res = await client.sendCommand({ command, automation_id: auroraAdvanced.automation_id, source_digest: auroraAdvanced.source_digest, ...extra });
+      check(`routine.${label}: advanced automation refused (routine_advanced)`, res.ok === false && res.error.code === "conflict" && res.error.details.kind === "routine_advanced", JSON.stringify(res.error));
+    }
+
+    // runtime policy: restricted modes reject routine writes (mirrors policy.py)
+    const adminClient = createMockSceneStudioClient(baseData, { scenarioId: "empty-registry" });
+    const adminStatus = await adminClient.getStatus();
+    check("routines: registry_admin policy excludes routine commands", adminStatus.runtime.allowed_commands.every((c) => !c.startsWith("routine.")));
+    const adminCreate = await adminClient.sendCommand({ command: "routine.create", scene_id: "x", behavior: "apply", time: "19:30" });
+    check("routines: registry_admin client rejects routine.create via store gating", adminCreate.ok === false);
+
+    // store integration: state.routines + routinesForScene grouping
+    const store = createStore(client);
+    await store.init();
+    check("store: routines projection fetched into state", store.state.routines && store.state.routines.available === true && store.state.routines.routines.length > 0);
+    const forScene = store.routinesForScene("aurora_flow");
+    check("store: routinesForScene groups by scene_id (native + advanced)", forScene.length === 2 && forScene.every((r) => r.scene_id === "aurora_flow"));
+    const routineCreateRes = await store.sendCommand({ command: "routine.create", scene_id: "meeting_blue", behavior: "apply", time: "21:00", weekdays: ["mon", "thu"] });
+    check("store: routine.create through sendCommand ok", routineCreateRes.ok === true);
+    check("store: post-command refresh re-reads routines", store.routinesForScene("meeting_blue").length === 1);
+    check("store: routine notice is human-readable", /Scheduled/.test((store.state.notice && store.state.notice.text) || ""));
   }
 
   // --- revision-cache decision (pure, plan §9.4 skip logic) -------------

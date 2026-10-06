@@ -1300,6 +1300,239 @@ async function main() {
       JSON.stringify(sceneScopeFlow)
     );
 
+    // 5e. HA-native routine awareness on the row chrome (routines pass):
+    // the temporal chip, the anchored schedule popover, native-grammar
+    // editing, and read-only advanced automations. No new navigation
+    // section — everything lives inside the existing Scenes rows.
+    const routineFlow = await evaluate(`(async () => {
+  try {
+      const app = () => document.querySelector("ss-app");
+      const store = app().store;
+      await store.setScenario("all-healthy");
+      store.setView("scenes");
+      const waitFor = async (fn, ms = 6000) => {
+        const t0 = Date.now();
+        while (Date.now() - t0 < ms) {
+          try { const v = fn(); if (v) return v; } catch {}
+          await new Promise((r) => setTimeout(r, 60));
+        }
+        return null;
+      };
+      const root = () => dom(dom(app()).querySelector("ss-view-scenes"));
+      const rowFor = async (sceneId) =>
+        await waitFor(() => [...root().querySelectorAll("ss-scene-row")].find((r) => r.scene && r.scene.id === sceneId));
+
+      const twilightRow = await rowFor("twilight");
+      if (!twilightRow) return { fail: "twilight row not found" };
+      const chipEl = (row) => dom(row).querySelector("ss-routine-popover");
+      if (!chipEl(twilightRow)) return { fail: "no ss-routine-popover element on the twilight row" };
+      const chip = (row) => dom(chipEl(row)).querySelector(".trigger");
+      const trigger = chip(twilightRow);
+      if (!trigger) return { fail: "no routine chip on the twilight row" };
+      const oneRoutineText = trigger.textContent.replace(/\\s+/g, " ").trim();
+      store.select(null);
+      trigger.click();
+      await new Promise((r) => setTimeout(r, 80));
+      const pop = (row) => dom(chipEl(row)).querySelector("[popover]");
+      const twilightPop = pop(twilightRow);
+      const openState = twilightPop ? twilightPop.matches(":popover-open") : false;
+      const popText = twilightPop ? twilightPop.textContent.replace(/\\s+/g, " ").trim() : "";
+      const selectedAfterOpen = !!(store.state.selection && store.state.selection.type === "scene");
+      const inViewport = openState && twilightPop.getBoundingClientRect().width > 0 &&
+        twilightPop.getBoundingClientRect().right <= window.innerWidth;
+
+      // Edit the one native routine: editor opens from the list, time change
+      // round-trips through the backend command and lands back in the chip.
+      const editBtn = twilightPop ? [...twilightPop.querySelectorAll(".routine .controls .btn")].find((b) => b.textContent.trim() === "Edit") : null;
+      if (!editBtn) return { fail: "no Edit button in the twilight popover", oneRoutineText };
+      editBtn.click();
+      await new Promise((r) => setTimeout(r, 80));
+      const pop2 = pop(twilightRow);
+      const timeInput = pop2 ? pop2.querySelector('input[type="time"]') : null;
+      if (!timeInput) return { fail: "no time input in the routine editor" };
+      const playBtn = [...pop2.querySelectorAll(".segment button")].find((b) => b.textContent.trim() === "Play");
+      const staticPlayDisabled = playBtn ? playBtn.disabled : null;
+      timeInput.value = "20:45";
+      timeInput.dispatchEvent(new Event("change"));
+      await new Promise((r) => setTimeout(r, 40));
+      const saveBtn = [...pop2.querySelectorAll(".editor-actions .btn")].find((b) => b.textContent.trim() === "Save");
+      if (!saveBtn) return { fail: "no Save button in the routine editor" };
+      const digestBefore = store.routinesForScene("twilight")[0].source_digest;
+      saveBtn.click();
+      const updated = await waitFor(() => {
+        const list = store.routinesForScene("twilight");
+        return list.length === 1 && list[0].source_digest !== digestBefore ? list[0] : null;
+      });
+      await new Promise((r) => setTimeout(r, 80));
+      const triggerAfter = chip(twilightRow);
+      const textAfter = triggerAfter ? triggerAfter.textContent.replace(/\\s+/g, " ").trim() : "";
+      if (pop2 && pop2.hidePopover) pop2.hidePopover();
+      return {
+        oneRoutineText, openState, popText, selectedAfterOpen, inViewport, staticPlayDisabled,
+        updatedTime: updated && updated.schedule ? updated.schedule.time : null,
+        textAfter, editorClosed: !pop(twilightRow) ? "pop-gone" : !pop(twilightRow).querySelector(".editor"),
+      };
+  } catch (err) { return { fail: String(err && err.message), at: String(err && err.stack) };
+  }
+    })()`);
+    check(
+      "routines: one routine renders the concise recurrence + time on the row chip",
+      !!routineFlow && /Weekdays/.test(routineFlow.oneRoutineText || "") && /7:30 PM/.test(routineFlow.oneRoutineText || ""),
+      JSON.stringify(routineFlow)
+    );
+    check(
+      "routines: the schedule popover opens anchored in the top layer (not clipped)",
+      !!routineFlow && routineFlow.openState === true && routineFlow.inViewport === true,
+      JSON.stringify(routineFlow)
+    );
+    check(
+      "routines: the popover reads as a schedule editor, not trigger/action YAML",
+      !!routineFlow && /Weekdays 7:30 PM/.test(routineFlow.popText || "") && /Add schedule/.test(routineFlow.popText || "") && !/trigger/i.test(routineFlow.popText || ""),
+      JSON.stringify(routineFlow)
+    );
+    check(
+      "routines: opening the schedule popover does not also select the row",
+      !!routineFlow && routineFlow.selectedAfterOpen === false,
+      JSON.stringify(routineFlow)
+    );
+    check(
+      "routines: Play is disabled for a static scene (Apply remains the scheduled action)",
+      !!routineFlow && routineFlow.staticPlayDisabled === true,
+      JSON.stringify(routineFlow)
+    );
+    check(
+      "routines: a simple routine edits in place (time round-trips through the backend)",
+      !!routineFlow && routineFlow.updatedTime === "20:45",
+      JSON.stringify(routineFlow)
+    );
+    check(
+      "routines: the row chip reflects the edited schedule",
+      !!routineFlow && /8:45 PM/.test(routineFlow.textAfter || "") && routineFlow.editorClosed === true,
+      JSON.stringify(routineFlow)
+    );
+
+      const advancedFlow = await evaluate(`(async () => {
+  try {
+      const app = () => document.querySelector("ss-app");
+      const store = app().store;
+      store.setView("scenes");
+      const waitFor = async (fn, ms = 6000) => {
+        const t0 = Date.now();
+        while (Date.now() - t0 < ms) {
+          try { const v = fn(); if (v) return v; } catch {}
+          await new Promise((r) => setTimeout(r, 60));
+        }
+        return null;
+      };
+      const root = () => dom(dom(app()).querySelector("ss-view-scenes"));
+      const rowFor = async (sceneId) =>
+        await waitFor(() => [...root().querySelectorAll("ss-scene-row")].find((r) => r.scene && r.scene.id === sceneId));
+      const auroraRow = await rowFor("aurora_flow");
+      if (!auroraRow) return { fail: "aurora_flow row not found" };
+      const auroraChip = dom(dom(auroraRow).querySelector("ss-routine-popover"));
+      const trigger = auroraChip ? auroraChip.querySelector(".trigger") : null;
+      if (!trigger) return { fail: "no routine chip on the aurora row" };
+      const severalText = trigger.textContent.replace(/\\s+/g, " ").trim();
+      trigger.click();
+      await new Promise((r) => setTimeout(r, 80));
+      const pop = dom(dom(auroraRow).querySelector("ss-routine-popover")).querySelector("[popover]");
+      const popText = pop ? pop.textContent.replace(/\\s+/g, " ").trim() : "";
+      const advancedCard = pop ? pop.querySelector(".routine.advanced") : null;
+      const advancedControls = advancedCard ? [...advancedCard.querySelectorAll("button")].map((b) => b.textContent.trim()) : [];
+      const nativeStillEditable = advancedCard ? [...pop.querySelectorAll(".routine:not(.advanced) .controls .btn")].some((b) => b.textContent.trim() === "Edit") : false;
+      if (pop && pop.hidePopover) pop.hidePopover();
+
+      // meeting_blue is ARCHIVED in the sample catalog: archived rows are
+      // unschedulable by design — no routine affordance at all.
+      const archivedRow = await rowFor("meeting_blue");
+      if (!archivedRow) return { fail: "archived meeting_blue row not found" };
+      const archivedHasChip = !!dom(dom(archivedRow).querySelector("ss-routine-popover"));
+
+      // Reopen the aurora popover and create a SECOND native routine through
+      // the inline editor (dynamic scene -> the Play choice is offered).
+      const auroraChip2 = dom(dom(auroraRow).querySelector("ss-routine-popover"));
+      const trigger2 = auroraChip2 ? auroraChip2.querySelector(".trigger") : null;
+      if (!trigger2) return { fail: "aurora chip disappeared" };
+      trigger2.click();
+      await new Promise((r) => setTimeout(r, 80));
+      const pop2 = dom(dom(auroraRow).querySelector("ss-routine-popover")).querySelector("[popover]");
+      const addBtn = pop2 ? [...pop2.querySelectorAll("button")].find((b) => /Add schedule/.test(b.textContent)) : null;
+      if (!addBtn) return { fail: "no Add schedule button" };
+      addBtn.click();
+      await new Promise((r) => setTimeout(r, 80));
+      const pop3 = dom(dom(auroraRow).querySelector("ss-routine-popover")).querySelector("[popover]");
+      const timeInput = pop3 ? pop3.querySelector('input[type="time"]') : null;
+      if (!timeInput) return { fail: "no time input in the editor" };
+      const playBtn = [...pop3.querySelectorAll(".segment button")].find((b) => b.textContent.trim() === "Play");
+      const dynamicPlayEnabled = playBtn ? !playBtn.disabled : null;
+      timeInput.value = "07:10";
+      timeInput.dispatchEvent(new Event("change"));
+      const addSave = [...pop3.querySelectorAll(".editor-actions .btn")].find((b) => /Add schedule/.test(b.textContent));
+      if (!addSave) return { fail: "no Add schedule save button" };
+      addSave.click();
+      const createdCount = await waitFor(() => store.routinesForScene("aurora_flow").length === 3 ? 3 : null);
+      const auroraTextAfter = dom(dom(auroraRow).querySelector("ss-routine-popover")).querySelector(".trigger").textContent.replace(/\\s+/g, " ").trim();
+      if (pop3 && pop3.hidePopover) pop3.hidePopover();
+
+      // Delete the just-created routine (two-step confirm) -> back to 2.
+      const created = store.routinesForScene("aurora_flow").find((r) => r.schedule && r.schedule.time === "07:10");
+      if (!created) return { fail: "created routine not found in the projection" };
+      trigger2.click();
+      await new Promise((r) => setTimeout(r, 80));
+      const delPop = dom(dom(auroraRow).querySelector("ss-routine-popover")).querySelector("[popover]");
+      const delBtn = [...delPop.querySelectorAll(".routine .controls .btn")].find(
+        (b) => b.textContent.trim() === "Delete" && b.closest(".routine").textContent.includes("7:10 AM")
+      );
+      if (!delBtn) return { fail: "no Delete button for the created routine" };
+      delBtn.click();
+      await new Promise((r) => setTimeout(r, 60));
+      const confirmBtn = [...delPop.querySelectorAll(".routine .controls .btn")].find(
+        (b) => /Confirm delete/.test(b.textContent) && b.closest(".routine").textContent.includes("7:10 AM")
+      );
+      const twoStep = !!confirmBtn;
+      if (confirmBtn) confirmBtn.click();
+      const removed = await waitFor(() => store.routinesForScene("aurora_flow").length === 2 ? true : null);
+      if (delPop && delPop.hidePopover) delPop.hidePopover();
+      return {
+        severalText, popText, advancedControls, nativeStillEditable,
+        archivedHasChip, dynamicPlayEnabled, createdCount, auroraTextAfter, twoStep, removed,
+      };
+  } catch (err) { return { fail: String(err && err.message), at: String(err && err.stack) };
+  }
+    })()`);
+    check(
+      "routines: several routines summarize as a count on the chip",
+      !!advancedFlow && /2 routines/.test(advancedFlow.severalText || ""),
+      JSON.stringify(advancedFlow)
+    );
+    check(
+      "routines: advanced automation is shown, labeled, and non-editable",
+      !!advancedFlow && /Advanced/.test(advancedFlow.popText || "") && /Managed in Home Assistant/.test(advancedFlow.popText || "") &&
+        advancedFlow.advancedControls.length === 0 && advancedFlow.nativeStillEditable === true,
+      JSON.stringify(advancedFlow)
+    );
+    check(
+      "routines: archived scene rows carry no schedule affordance (unschedulable)",
+      !!advancedFlow && advancedFlow.archivedHasChip === false,
+      JSON.stringify(advancedFlow)
+    );
+    check(
+      "routines: Play is offered dynamically — enabled for a dynamic scene",
+      !!advancedFlow && advancedFlow.dynamicPlayEnabled === true,
+      JSON.stringify(advancedFlow)
+    );
+    check(
+      "routines: Add schedule creates a native routine and the chip reaches '3 routines'",
+      !!advancedFlow && advancedFlow.createdCount === 3 && /3 routines/.test(advancedFlow.auroraTextAfter || ""),
+      JSON.stringify(advancedFlow)
+    );
+    check(
+      "routines: delete is a two-step confirm and removes the automation",
+      !!advancedFlow && advancedFlow.twoStep === true && advancedFlow.removed === true,
+      JSON.stringify(advancedFlow)
+    );
+
+
     // 5d. User feedback (2026-09-16): on a narrow scene row the swatch is
     // the single most useful way to recognize a scene at a glance, so it
     // must be the LAST thing the row hides — location (scope pill) and the
@@ -1333,6 +1566,24 @@ async function main() {
         readyVisible: visible(sr.querySelector(".ready")),
       };
     })()`);
+    // Routines pass (compact): the routine chip collapses to the clock
+    // glyph below the row's 700px container breakpoint (summary text stays
+    // in the DOM, hidden) and never pushes the row wider than its panel.
+    const mobileRoutineFlow = await evaluate(`(async () => {
+      const app = () => document.querySelector("ss-app");
+      const root = () => dom(dom(app()).querySelector("ss-view-scenes"));
+      const row = [...root().querySelectorAll("ss-scene-row")].find((r) => r.scene && r.scene.id === "twilight");
+      if (!row) return { fail: "twilight row not found" };
+      const pop = dom(row).querySelector("ss-routine-popover");
+      if (!pop) return { fail: "no ss-routine-popover on the mobile row" };
+      const trigger = dom(pop).querySelector(".trigger");
+      if (!trigger) return { fail: "no routine chip trigger" };
+      const text = dom(pop).querySelector(".trigger .text");
+      const textHidden = !text || getComputedStyle(text).display === "none";
+      const rowRect = row.getBoundingClientRect();
+      const popRect = pop.getBoundingClientRect();
+      return { textHidden, chipWithinRow: popRect.right <= rowRect.right + 1 && popRect.left >= rowRect.left - 1 };
+    })()`);
     await send("Emulation.clearDeviceMetricsOverride");
     await sleep(120);
     check(
@@ -1344,6 +1595,11 @@ async function main() {
       "scenes (mobile, 390px): location (scope pill) and the ready/disabled counts hide BEFORE the swatch",
       !!mobileSwatchFlow && mobileSwatchFlow.scopeVisible === false && mobileSwatchFlow.readyVisible === false,
       JSON.stringify(mobileSwatchFlow)
+    );
+    check(
+      "routines (mobile, 390px): the chip collapses to the clock glyph and stays inside the row",
+      !!mobileRoutineFlow && mobileRoutineFlow.textHidden === true && mobileRoutineFlow.chipWithinRow === true,
+      JSON.stringify(mobileRoutineFlow)
     );
 
     // 5e. User feedback (2026-09-16): a fixed-px column budget silently

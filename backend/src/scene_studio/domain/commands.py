@@ -12,6 +12,11 @@ from enum import Enum
 from typing import Any, ClassVar
 
 from .contention import CONTENTION_POLICIES, parse_contention_override
+from .routines import (
+    validate_routine_behavior,
+    validate_routine_time,
+    validate_routine_weekdays,
+)
 from .serde import (
     ValidationError,
     join,
@@ -482,6 +487,120 @@ class ExportDiagnosticsParams:
         )
 
 
+@dataclass
+class RoutineCreateParams:
+    """Create one native HA automation over the supported routine grammar.
+
+    ``time`` is ``HH:MM`` (24h); ``weekdays`` absent/None = every day, else
+    a subset of HA weekday strings (mon..sun). ``behavior`` is ``apply`` or
+    ``play`` — ``play`` is refused for static scenes (they cannot start
+    playback). HA generates a fresh stable automation id; the alias and the
+    versioned provenance description are derived server-side.
+    """
+
+    scene_id: str
+    behavior: str  # apply | play
+    time: str      # HH:MM 24h
+    weekdays: list[str] | None = None
+
+    ALLOWED_KEYS: ClassVar[set[str]] = {"scene_id", "behavior", "time", "weekdays"}
+
+    @classmethod
+    def from_dict(cls, data: dict, path: str = "params") -> "RoutineCreateParams":
+        data = require_mapping(data, path)
+        reject_unknown_keys(data, cls.ALLOWED_KEYS, path)
+        weekdays = data.get("weekdays")
+        if weekdays is not None and (not isinstance(weekdays, list) or not all(isinstance(item, str) for item in weekdays)):
+            raise ValidationError(join(path, "weekdays"), "expected a list of weekday strings (mon..sun) or null")
+        return cls(
+            scene_id=require_str(data, "scene_id", join(path, "scene_id"), max_length=64),
+            behavior=validate_routine_behavior(
+                require_str(data, "behavior", join(path, "behavior"), max_length=16),
+                join(path, "behavior"),
+            ),
+            time=validate_routine_time(
+                require_str(data, "time", join(path, "time"), max_length=5),
+                join(path, "time"),
+            ),
+            weekdays=weekdays,
+        )
+
+
+@dataclass
+class RoutineUpdateParams:
+    """Update one native routine with optimistic concurrency.
+
+    ``source_digest`` is the automation's ``source_digest`` from the last
+    routine read; a mismatch with HA's current config is a structured
+    conflict — never an overwrite. Omitted fields keep their current value;
+    ``weekdays: null`` explicitly resets to every day.
+    """
+
+    automation_id: str
+    source_digest: str
+    time: str | None = None
+    weekdays: list[str] | None = ...
+    behavior: str | None = None
+    scene_id: str | None = None
+
+    ALLOWED_KEYS: ClassVar[set[str]] = {"automation_id", "source_digest", "time", "weekdays", "behavior", "scene_id"}
+
+    @classmethod
+    def from_dict(cls, data: dict, path: str = "params") -> "RoutineUpdateParams":
+        data = require_mapping(data, path)
+        reject_unknown_keys(data, cls.ALLOWED_KEYS, path)
+        weekdays = data.get("weekdays", ...)
+        if weekdays is not ... and weekdays is not None \
+                and (not isinstance(weekdays, list) or not all(isinstance(item, str) for item in weekdays)):
+            raise ValidationError(join(path, "weekdays"), "expected a list of weekday strings (mon..sun) or null")
+        time_value = optional_str(data, "time", path, max_length=5)
+        if time_value is not None:
+            time_value = validate_routine_time(time_value, join(path, "time"))
+        behavior = optional_str(data, "behavior", path, max_length=16)
+        if behavior is not None:
+            behavior = validate_routine_behavior(behavior, join(path, "behavior"))
+        return cls(
+            automation_id=require_str(data, "automation_id", join(path, "automation_id"), max_length=64),
+            source_digest=require_str(data, "source_digest", join(path, "source_digest"), max_length=64),
+            time=time_value,
+            weekdays=list(weekdays) if weekdays is not ... and weekdays is not None else weekdays,
+            behavior=behavior,
+            scene_id=optional_str(data, "scene_id", path, max_length=64),
+        )
+
+
+@dataclass
+class RoutineAddressedParams:
+    """Automation-addressed routine mutation carrying the editor's
+    concurrency token (``source_digest``)."""
+
+    automation_id: str
+    source_digest: str
+
+    ALLOWED_KEYS: ClassVar[set[str]] = {"automation_id", "source_digest"}
+
+    @classmethod
+    def from_dict(cls, data: dict, path: str = "params") -> "RoutineAddressedParams":
+        data = require_mapping(data, path)
+        reject_unknown_keys(data, cls.ALLOWED_KEYS, path)
+        return cls(
+            automation_id=require_str(data, "automation_id", join(path, "automation_id"), max_length=64),
+            source_digest=require_str(data, "source_digest", join(path, "source_digest"), max_length=64),
+        )
+
+
+class RoutineDeleteParams(RoutineAddressedParams):
+    """Delete one native routine (native_routine classification only)."""
+
+
+class RoutineEnableParams(RoutineAddressedParams):
+    """Enable one native routine."""
+
+
+class RoutineDisableParams(RoutineAddressedParams):
+    """Disable one native routine."""
+
+
 # ---------------------------------------------------------------------------
 # catalog: command name -> payload parser
 # ---------------------------------------------------------------------------
@@ -520,6 +639,11 @@ COMMAND_CATALOG: dict[str, Any] = {
     "registry.migrate": EmptyParams,
     "discovery.run": DiscoveryRunParams,
     "diagnostics.export": ExportDiagnosticsParams,
+    "routine.create": RoutineCreateParams,  # native HA automation over the supported grammar
+    "routine.update": RoutineUpdateParams,  # concurrency-checked native routine edit
+    "routine.delete": RoutineDeleteParams,  # remove a native routine from HA
+    "routine.enable": RoutineEnableParams,
+    "routine.disable": RoutineDisableParams,
 }
 
 RESERVED_ENVELOPE_KEYS = {"command", "request_id"}

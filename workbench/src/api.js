@@ -47,6 +47,15 @@
  *   the engine has no discovery report on record yet.
  * @property {(limit?: number) => Promise<object>} getRecentEvents
  *   {events: OperationalEventJSON[]} newest-first.
+ * @property {({refresh?: boolean}?) => Promise<object>} getRoutines
+ *   Derived HA routine projection (routines pass, GET /routines):
+ *   {available, unavailable_reason?, routines: [RoutineProjection],
+ *   refreshed_at?, stale}. A RoutineProjection mirrors domain/routines.py:
+ *   {automation_id, entity_id, alias, enabled, classification
+ *   ("native_routine"|"recognized_advanced"), scene_id, behavior
+ *   ("apply"|"play"), schedule {time "HH:MM", weekdays|null},
+ *   provenance?, source_digest, unsupported_reasons?}. Advanced routines
+ *   are read-only through Scene Studio.
  * @property {(envelope: object) => Promise<object>} sendCommand
  *   CommandEnvelope -> CommandResult: {command, ok, request_id?, data?,
  *   error?{code,message,details?}} (mirrors commands.py). Throws ONLY on
@@ -84,6 +93,7 @@ import {
 // importable under plain Node (scripts/smoke.mjs).
 import { buildMockLiveFixtureState } from "./mocks/live_state.js";
 import { localBuild } from "./product.js";
+import { ROUTINE_WEEKDAYS, formatRoutineTime12h, routineAlias, describeRoutineWeekdays } from "./routines.js";
 import goldenAuroraFlow from "./mocks/render_plans/aurora_flow.json" with { type: "json" };
 import goldenMeetingBlue from "./mocks/render_plans/meeting_blue.json" with { type: "json" };
 import goldenTwilight from "./mocks/render_plans/twilight.json" with { type: "json" };
@@ -196,6 +206,18 @@ const PARAM_SPECS = {
     required: {},
     optional: { redact: "bool", recent_events: { int: true, min: 1, max: 1000 } },
   },
+  // HA-native routine CRUD (routines pass). weekdays null = every day.
+  "routine.create": {
+    required: { scene_id: "str", behavior: "str", time: { str: true, max: 5 } },
+    optional: { weekdays: "strListOrNull" },
+  },
+  "routine.update": {
+    required: { automation_id: "str", source_digest: "str" },
+    optional: { time: "str", weekdays: "strListOrNull", behavior: "str", scene_id: "str" },
+  },
+  "routine.delete": { required: { automation_id: "str", source_digest: "str" }, optional: {} },
+  "routine.enable": { required: { automation_id: "str", source_digest: "str" }, optional: {} },
+  "routine.disable": { required: { automation_id: "str", source_digest: "str" }, optional: {} },
 };
 
 /** Commands that mutate state and therefore bump the revision. */
@@ -208,6 +230,7 @@ const MUTATING = new Set([
   "fixture.set_contention_policy", "sync.suspend", "sync.resume",
   "discovery.run",
   "fixture.adopt", "target.create", "target.update",
+  "routine.create", "routine.update", "routine.delete", "routine.enable", "routine.disable",
 ]);
 
 /**
@@ -238,6 +261,9 @@ const NORMAL_COMMANDS = [
   "fixture.reconcile", "fixture.reconcile_preview", "fixture.adopt", "target.create", "target.update",
   "registry.migration_preview", "registry.migrate",
   "discovery.run", "diagnostics.export",
+  // HA-native routine CRUD (routines pass): normal mode only, mirroring
+  // service/policy.py (restricted modes reject external-system writes).
+  "routine.create", "routine.update", "routine.delete", "routine.enable", "routine.disable",
 ];
 
 function mockRuntime(scenarioId) {
@@ -288,7 +314,7 @@ function validateParams(spec, data) {
     if (!rawSpec) {
       throw new CommandFailure("validation_error", `unknown param '${key}'`, { path: `params.${key}` });
     }
-    const specObj = rawSpec === "str" ? { str: true, max: 64 } : rawSpec === "bool" ? { bool: true } : rawSpec === "str[]" ? { strList: true } : rawSpec;
+    const specObj = rawSpec === "str" ? { str: true, max: 64 } : rawSpec === "bool" ? { bool: true } : rawSpec === "str[]" ? { strList: true } : rawSpec === "strListOrNull" ? { strListOrNull: true } : rawSpec;
     if (specObj.str) {
       if (typeof value !== "string") {
         throw new CommandFailure("validation_error", `expected a string`, { path: `params.${key}`, got: typeLabel(value) });
@@ -318,6 +344,12 @@ function validateParams(spec, data) {
         throw new CommandFailure("validation_error", `expected a list of provider names`, { path: `params.${key}` });
       }
       out[key] = [...value];
+    } else if (specObj.strListOrNull) {
+      // weekdays-style params: a list of strings, or explicit null ("every day").
+      if (value !== null && (!Array.isArray(value) || value.some((v) => typeof v !== "string"))) {
+        throw new CommandFailure("validation_error", `expected a list of strings or null`, { path: `params.${key}` });
+      }
+      out[key] = value === null ? null : [...value];
     }
   }
   for (const key of Object.keys(spec.required)) {
@@ -874,6 +906,117 @@ export function createMockSceneStudioClient(baseData, options = {}) {
 
   // Initial realization of the scenario's seeded sessions.
   seedPlaybackSessions();
+
+  // ---- HA-native routine simulation (routines pass) ----------------------
+  //
+  // The mock holds routine PROJECTIONS (the /routines response shape),
+  // seeded deterministically from the scenario's scenes — the same contract
+  // domain/routines.py derives from real HA automations. CRUD handlers
+  // exercise the backend's discipline: digest-checked mutations (structured
+  // `routine_source_changed` conflicts), advanced routines read-only, and
+  // `play` refused for static scenes. This is contract fidelity for the
+  // frontend, never a second automation engine.
+
+  let routineStore = [];
+  let routineSeq = 0;
+
+  /** Tiny deterministic content digest standing in for the backend's
+   *  canonical-config sha256 (only equality behavior is contractual). */
+  const routineDigest = (routine) => {
+    const content = JSON.stringify([
+      routine.automation_id, routine.alias, routine.scene_id, routine.behavior,
+      routine.schedule && routine.schedule.time, routine.schedule && routine.schedule.weekdays,
+      routine.enabled === false ? "off" : "on", routine.unsupported_reasons || [],
+    ]);
+    let hash = 5381;
+    for (let i = 0; i < content.length; i += 1) hash = ((hash * 33) ^ content.charCodeAt(i)) >>> 0;
+    return hash.toString(16).padStart(8, "0");
+  };
+
+  // `routineAlias`/`describeRoutineWeekdays`/`formatRoutineTime12h` come
+  // from the shared DOM-free routines module (src/routines.js) so mock and
+  // live UI text can never drift.
+
+  const seededRoutine = (scene, { behavior, time, weekdays, classification = "native_routine", alias = null, unsupported_reasons = [] }) => {
+    routineSeq += 1;
+    const automationId = classification === "native_routine" ? `ssr_mock${String(routineSeq).padStart(8, "0")}` : `user_advanced_${routineSeq}`;
+    const routine = {
+      automation_id: automationId,
+      entity_id: `automation.${automationId.replace(/-/g, "_")}`,
+      alias: alias || (classification === "native_routine" ? routineAlias(scene.name, time, weekdays) : `${scene.name} occupancy automation`),
+      enabled: true,
+      classification,
+      scene_id: scene.id,
+      behavior,
+      schedule: classification === "native_routine" ? { time, weekdays: weekdays ? [...weekdays] : null } : null,
+      provenance: classification === "native_routine" ? { schema: 1, scene_id: scene.id, behavior } : null,
+      unsupported_reasons,
+    };
+    routine.source_digest = routineDigest(routine);
+    return routine;
+  };
+
+  const seedRoutines = () => {
+    routineStore = [];
+    routineSeq = 0;
+    const scenes = data.scenes.scenes;
+    const twilight = scenes.find((s) => s.id === "twilight");
+    if (twilight) {
+      routineStore.push(seededRoutine(twilight, { behavior: "apply", time: "19:30", weekdays: ["mon", "tue", "wed", "thu", "fri"] }));
+    }
+    const aurora = scenes.find((s) => s.id === "aurora_flow");
+    if (aurora) {
+      routineStore.push(seededRoutine(aurora, { behavior: "play", time: "22:00", weekdays: null }));
+      routineStore.push(seededRoutine(aurora, {
+        behavior: "apply",
+        classification: "recognized_advanced",
+        unsupported_reasons: ["automation has multiple actions", "unsupported trigger platform 'state'"],
+      }));
+    }
+  };
+
+  const findRoutine = (automationId) => routineStore.find((r) => r.automation_id === automationId);
+
+  /** Shared CRUD gate: the routine must exist, be native, and still carry
+   *  the caller's digest (structured conflict otherwise). */
+  const requireEditableRoutine = (params) => {
+    const routine = findRoutine(params.automation_id);
+    if (!routine) {
+      throw new CommandFailure("conflict", "Home Assistant changed this automation since it was loaded; refresh the routines and reapply your edit.", {
+        kind: "routine_source_changed", automation_id: params.automation_id, current_digest: "",
+      });
+    }
+    if (routine.classification !== "native_routine") {
+      throw new CommandFailure("conflict", `automation '${routine.automation_id}' is advanced (Home Assistant managed); Scene Studio does not edit it`, {
+        kind: "routine_advanced", automation_id: routine.automation_id, unsupported_reasons: routine.unsupported_reasons || [],
+      });
+    }
+    if (params.source_digest !== routine.source_digest) {
+      throw new CommandFailure("conflict", "Home Assistant changed this automation since it was loaded; refresh the routines and reapply your edit.", {
+        kind: "routine_source_changed", automation_id: routine.automation_id, current_digest: routine.source_digest,
+      });
+    }
+    return routine;
+  };
+
+  const sceneIsDynamic = (sceneId) => {
+    const scene = data.scenes.scenes.find((s) => s.id === sceneId);
+    return !!(scene && scene.motion && scene.motion.mode !== "static");
+  };
+
+  const validateRoutineSchedule = (time, weekdays) => {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(time || ""))) {
+      throw new CommandFailure("validation_error", "expected a 'HH:MM' 24-hour time (e.g. '19:30')", { path: "params.time" });
+    }
+    if (weekdays !== null && weekdays !== undefined) {
+      if (!Array.isArray(weekdays) || weekdays.length === 0 || weekdays.some((d) => !ROUTINE_WEEKDAYS.includes(d))) {
+        throw new CommandFailure("validation_error", "expected weekday strings (mon..sun) or null", { path: "params.weekdays" });
+      }
+    }
+  };
+
+  // Initial routine projection seed (routines pass).
+  seedRoutines();
 
   const currentDoc = () =>
     data.currentScene
@@ -1879,6 +2022,110 @@ export function createMockSceneStudioClient(baseData, options = {}) {
         },
       };
     },
+
+    // ---- HA-native routine CRUD (routines pass) --------------------------
+
+    "routine.create": (params) => {
+      const scene = data.scenes.scenes.find((s) => s.id === params.scene_id);
+      if (!scene) throw new CommandFailure("not_found", `scene '${params.scene_id}' not found`);
+      if (!["apply", "play"].includes(params.behavior)) {
+        throw new CommandFailure("validation_error", "must be 'apply' or 'play'", { path: "params.behavior" });
+      }
+      validateRoutineSchedule(params.time, params.weekdays);
+      if (params.behavior === "play" && !sceneIsDynamic(scene.id)) {
+        throw new CommandFailure("validation_error",
+          `scene '${scene.id}' is static (motion.mode=static); scheduled behavior must be 'apply' — dynamic play requires a dynamic scene`,
+          { path: "params.behavior" });
+      }
+      const weekdays = params.weekdays ? [...new Set(params.weekdays)].sort(
+        (a, b) => ROUTINE_WEEKDAYS.indexOf(a) - ROUTINE_WEEKDAYS.indexOf(b)
+      ) : null;
+      const routine = seededRoutine(scene, { behavior: params.behavior, time: params.time, weekdays });
+      routine.alias = routineAlias(scene.name, params.time, weekdays);
+      routine.source_digest = routineDigest(routine);
+      routineStore.push(routine);
+      pushEvent({
+        level: "info",
+        category: "automation",
+        summary: `Scheduled ${scene.name} · ${describeRoutineWeekdays(weekdays)} ${formatRoutineTime12h(params.time)}`,
+        detail: `created HA automation ${routine.automation_id} (${params.behavior} ${scene.id})`,
+        scene_id: scene.id,
+      });
+      return { data: { routine: clone(routine) } };
+    },
+
+    "routine.update": (params) => {
+      const routine = requireEditableRoutine(params);
+      const targetSceneId = params.scene_id ?? routine.scene_id;
+      const behavior = params.behavior ?? routine.behavior;
+      const time = params.time ?? routine.schedule.time;
+      const weekdays = params.weekdays === undefined ? (routine.schedule.weekdays ? [...routine.schedule.weekdays] : null) : params.weekdays;
+      const scene = data.scenes.scenes.find((s) => s.id === targetSceneId);
+      if (!scene) throw new CommandFailure("not_found", `scene '${targetSceneId}' not found`);
+      if (behavior === "play" && !sceneIsDynamic(targetSceneId)) {
+        throw new CommandFailure("validation_error",
+          `scene '${targetSceneId}' is static (motion.mode=static); scheduled behavior must be 'apply' — dynamic play requires a dynamic scene`,
+          { path: "params.behavior" });
+      }
+      validateRoutineSchedule(time, weekdays);
+      routine.scene_id = targetSceneId;
+      routine.behavior = behavior;
+      routine.schedule = { time, weekdays: weekdays ? [...new Set(weekdays)].sort(
+        (a, b) => ROUTINE_WEEKDAYS.indexOf(a) - ROUTINE_WEEKDAYS.indexOf(b)
+      ) : null };
+      routine.alias = routineAlias(scene.name, time, routine.schedule.weekdays);
+      routine.provenance = { schema: 1, scene_id: targetSceneId, behavior };
+      routine.source_digest = routineDigest(routine);
+      pushEvent({
+        level: "info",
+        category: "automation",
+        summary: `Scheduled ${scene.name} · ${describeRoutineWeekdays(routine.schedule.weekdays)} ${formatRoutineTime12h(time)} updated`,
+        detail: `updated HA automation ${routine.automation_id} (${behavior} ${targetSceneId})`,
+        scene_id: targetSceneId,
+      });
+      return { data: { routine: clone(routine) } };
+    },
+
+    "routine.delete": (params) => {
+      const routine = requireEditableRoutine(params);
+      routineStore = routineStore.filter((r) => r !== routine);
+      pushEvent({
+        level: "info",
+        category: "automation",
+        summary: "Scheduled scene routine removed",
+        detail: `deleted HA automation ${routine.automation_id}`,
+        scene_id: routine.scene_id,
+      });
+      return { data: { removed: true } };
+    },
+
+    "routine.enable": (params) => {
+      const routine = requireEditableRoutine(params);
+      routine.enabled = true;
+      routine.source_digest = routineDigest(routine);
+      pushEvent({
+        level: "info",
+        category: "automation",
+        summary: `Routine '${routine.alias}' enabled`,
+        detail: `automation ${routine.automation_id} set to on`,
+        scene_id: routine.scene_id,
+      });
+      return { data: { routine: clone(routine) } };
+    },
+
+    "routine.disable": (params) => {
+      const routine = requireEditableRoutine(params);
+      routine.enabled = false;
+      routine.source_digest = routineDigest(routine);
+      pushEvent({
+        level: "info",
+        category: "automation",
+        summary: `Routine '${routine.alias}' disabled`,
+        detail: `automation ${routine.automation_id} set to off`,
+        scene_id: routine.scene_id,
+      });
+      return { data: { routine: clone(routine) } };
+    },
   };
 
   // ---- public client ----------------------------------------------------
@@ -1908,6 +2155,17 @@ export function createMockSceneStudioClient(baseData, options = {}) {
 
     async getScenes() {
       return clone(data.scenes);
+    },
+
+    /** Derived HA routine projection (routines pass). */
+    async getRoutines() {
+      return {
+        available: true,
+        unavailable_reason: null,
+        routines: clone(routineStore),
+        refreshed_at: new Date(clockMs).toISOString(),
+        stale: false,
+      };
     },
 
     /** @returns {Promise<object>} see SceneStudioClient#getFixtureState */
@@ -1974,6 +2232,7 @@ export function createMockSceneStudioClient(baseData, options = {}) {
       discoveryRunMeta = clone(data.discoveryRunMeta);
       events = clone(data.events);
       seedPlaybackSessions();
+      seedRoutines();
       revision += 1;
     },
 
@@ -2266,6 +2525,12 @@ export function createHttpSceneStudioClient(baseUrl, options = {}) {
         readJson("/api/scene_studio/scenes", { archived: "true" }),
       ]);
       return { scenes: [...((active && active.scenes) || []), ...((archived && archived.scenes) || [])] };
+    },
+
+    /** Derived HA routine projection (routines pass); `refresh` forces a
+     *  HA re-read (`?refresh=true`) instead of the bounded TTL cache. */
+    async getRoutines(options = {}) {
+      return readJson("/api/scene_studio/routines", options.refresh ? { refresh: "true" } : undefined);
     },
 
     /** @returns {Promise<object>} see SceneStudioClient#getFixtureState */

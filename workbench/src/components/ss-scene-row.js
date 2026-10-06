@@ -53,6 +53,7 @@ import { bandGradient } from "./ss-swatch-band.js";
 import "./ss-scope-control.js";
 import "./ss-action-menu.js";
 import "./ss-overflow-menu.js";
+import "./ss-routine-popover.js";
 import { sceneLookSwatches } from "../scene_look.js";
 
 export class SsSceneRow extends LitElement {
@@ -67,6 +68,13 @@ export class SsSceneRow extends LitElement {
     // External light-sync (hyperHDR) contention is active somewhere in the
     // registry — surfaces the one-shot "Take over & apply" affordance.
     contentionActive: { type: Boolean },
+    // HA-native routine awareness (routines pass): this scene's routine
+    // projections (null = not loaded) + the /routines capability doc.
+    // Rendered through <ss-routine-popover> in the name cell; the row only
+    // forwards the bubbling `routine-action` events to the view.
+    routines: { attribute: false },
+    routinesAvailable: { type: Boolean },
+    routinesReason: { type: String },
   };
 
   static styles = css`
@@ -318,6 +326,12 @@ export class SsSceneRow extends LitElement {
       .active-tag {
         display: none;
       }
+      /* The routine chip collapses to its clock glyph (routines pass):
+         container queries cannot reach the nested shadow tree, so the row
+         sets a custom property the popover's own styles consume. */
+      ss-routine-popover {
+        --ss-routine-chip-text-display: none;
+      }
       /* Drawn by ::after (the row's ::before carries the palette tint),
          inset and rounded: a square full-bleed outline gets its corners
          clipped by the list panel's 12px rounded corners. */
@@ -340,6 +354,9 @@ export class SsSceneRow extends LitElement {
     this.active = false;
     this.sessionSummary = null;
     this.selected = false;
+    this.routines = null;
+    this.routinesAvailable = true;
+    this.routinesReason = null;
     this._editing = false;
   }
 
@@ -675,6 +692,20 @@ export class SsSceneRow extends LitElement {
             label=${this.#statusLabel(faults, ready)}
           ></ss-status-glyph>
           <span class="text">${s.name}</span>
+          <!-- HA-native routine affordance (routines pass): a compact
+               temporal chip in the row chrome — clock-only when unscheduled,
+               the concise recurrence + time for one routine, "N routines"
+               for several. Anchored popover, top-layer (never clipped);
+               archived rows stay unschedulable. -->
+          ${!this.archived
+            ? html`<ss-routine-popover
+                .scene=${s}
+                .routines=${this.routines}
+                .routinesAvailable=${this.routinesAvailable}
+                .routinesReason=${this.routinesReason}
+                .allowedCommands=${this.allowedCommands}
+              ></ss-routine-popover>`
+            : ""}
           ${runtimeTag
             ? html`<span
                 class="runtime-tag ${runtimeWarn ? "warn" : ""}"

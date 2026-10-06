@@ -118,3 +118,21 @@ export const iconDuplicate = (size = 16) =>
     size,
     svg`<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>`
   );
+
+export const iconClock = (size = 16) =>
+  base(
+    size,
+    svg`<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>`
+  );
+
+export const iconTrash = (size = 16) =>
+  base(
+    size,
+    svg`<path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M6 6l1 14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-14"/>`
+  );
+
+export const iconPlus = (size = 15) =>
+  base(
+    size,
+    svg`<path d="M12 5v14M5 12h14"/>`
+  );

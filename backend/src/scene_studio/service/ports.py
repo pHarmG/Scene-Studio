@@ -34,6 +34,9 @@ from ..domain.fixtures import Fixture
 __all__ = [
     "Clock",
     "DiscoveryFetchers",
+    "HaAutomationEntity",
+    "HaAutomationGateway",
+    "HaAutomationGatewayError",
     "MonotonicClock",
     "ProviderExecutor",
     "RECEIPT_KEYS",
@@ -159,6 +162,82 @@ class SteppingClock:
         value = self._current.strftime("%Y-%m-%dT%H:%M:%SZ")
         self._current += self._step
         return value
+
+
+# ---------------------------------------------------------------------------
+# HA automation gateway port (native routine awareness)
+# ---------------------------------------------------------------------------
+
+class HaAutomationGatewayError(Exception):
+    """Raised by a :class:`HaAutomationGateway` when HA contact or a
+    HA-native write fails. ``code`` is one of ``unavailable`` (capability
+    absent/blocked), ``http_error`` (transport/HTTP failure), or
+    ``invalid_response`` (HA answered with something unusable)."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+@dataclass
+class HaAutomationEntity:
+    """One ``automation.*`` entity as HA reports it (state attributes only)."""
+
+    entity_id: str
+    state: str            # "on" | "off" | "unavailable" | ...
+    automation_id: str | None   # attributes.id (None on legacy automations)
+    alias: str | None           # attributes.friendly_name
+
+
+class HaAutomationGateway(Protocol):
+    """Home Assistant's own automation REST surface — the ONLY channel
+    routine awareness and CRUD use. Implementations (adapter tree) perform
+    the HTTP; the engine and routine service stay transport-free.
+
+    Contract notes:
+
+    - All methods may raise :class:`HaAutomationGatewayError`; nothing here
+      is expected to swallow failures — the routine service maps them into
+      honest command results.
+    - No method ever touches YAML or the filesystem: this is the
+      HA-supported config/state/services API only. If an installation does
+      not permit API-managed automation editing, ``available()`` returns
+      False and the routine service reports the capability as unavailable —
+      there is no YAML fallback by design.
+    """
+
+    def available(self) -> bool:
+        """Whether API-managed automation editing is possible in this runtime."""
+        ...  # pragma: no cover - protocol
+
+    def unavailable_reason(self) -> str | None:
+        """Why the capability is absent (None when available)."""
+        ...  # pragma: no cover - protocol
+
+    def list_automation_entities(self) -> list[HaAutomationEntity]:
+        """Every ``automation.*`` entity with its on/off state and config id."""
+        ...  # pragma: no cover - protocol
+
+    def get_automation_config(self, automation_id: str) -> dict | None:
+        """The canonical stored automation config, or None when absent."""
+        ...  # pragma: no cover - protocol
+
+    def save_automation_config(self, automation_id: str, config: dict) -> None:
+        """Create or replace one automation config (HA-native upsert)."""
+        ...  # pragma: no cover - protocol
+
+    def delete_automation_config(self, automation_id: str) -> None:
+        """Delete one automation config (absent is acceptable)."""
+        ...  # pragma: no cover - protocol
+
+    def reload_automations(self) -> None:
+        """Ask HA to reload automation state from stored config."""
+        ...  # pragma: no cover - protocol
+
+    def set_automation_enabled(self, entity_id: str, enabled: bool) -> None:
+        """Enable/disable one automation entity via the automation service."""
+        ...  # pragma: no cover - protocol
 
 
 # ---------------------------------------------------------------------------

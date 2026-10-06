@@ -20,6 +20,7 @@ the only module that touches ``self.listen_event`` / ``self.set_state``.
 from __future__ import annotations
 
 from ..domain.fixtures import FixtureRegistry, project_target_membership
+from ..domain.routines import ROUTINE_COMMAND_EVENT
 
 __all__ = [
     "BRIDGE_SCHEMA_VERSION",
@@ -32,7 +33,9 @@ __all__ = [
 ]
 
 # Canonical event the card AND HA scripts fire (via hass.callApi or event).
-UI_COMMAND_EVENT = "scene_studio_ui_command"
+# One literal lives in domain.routines (the routine parser classifies
+# against the same name); this is the bridge-seam re-export.
+UI_COMMAND_EVENT = ROUTINE_COMMAND_EVENT
 
 # Compact HA-visible projection entity the card and scripts read.
 UI_PROJECTION_ENTITY = "sensor.scene_studio_ui"
@@ -48,8 +51,9 @@ BRIDGE_SCHEMA_VERSION = 3
 
 # Plan §4 "Suggested UI bridge allowlist" — deliberately smaller than the
 # full COMMAND_CATALOG. Registry administration, discovery mutation,
-# Builder create/update, and everything else stay unreachable through this
-# seam regardless of runtime mode.
+# Builder create/update, routine authoring (`routine.*` — the HA card is a
+# daily controller, never an automation editor), and everything else stay
+# unreachable through this seam regardless of runtime mode.
 UI_BRIDGE_ALLOWLIST = frozenset(
     {
         "scene.apply",
