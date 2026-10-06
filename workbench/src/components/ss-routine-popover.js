@@ -417,9 +417,12 @@ export class SsRoutinePopover extends LitElement {
     if (e.newState === "open") {
       this.#position(e.target);
     } else {
-      // Reset transient editor state when the popover light-dismisses.
+      // Reset transient editor state when the popover light-dismisses, and
+      // re-render now so a reopen shows the list — not a stale editor whose
+      // target routine may have changed underneath it.
       this._editor = null;
       this._confirmDelete = null;
+      this.requestUpdate();
     }
   }
 
@@ -685,7 +688,9 @@ export class SsRoutinePopover extends LitElement {
   render() {
     const sum = this.#summary();
     const loaded = sum !== null;
-    const disabled = !loaded || !this.routinesAvailable || !this.#can("routine.create");
+    // Viewing routines is read-only: the chip stays available regardless of
+    // write permissions — each editor control gates its own command.
+    const disabled = !loaded || !this.routinesAvailable;
     const chipTitle = !loaded
       ? "Schedules loading…"
       : !this.routinesAvailable

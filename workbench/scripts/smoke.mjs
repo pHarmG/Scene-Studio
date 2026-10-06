@@ -75,7 +75,7 @@ import {
 } from "../src/grouping.js";
 import { canonicalizeStaticPalette, resolveClusterPalette, resolveFixturePalette } from "../src/palette_assign.js";
 import { sceneLookSwatches } from "../src/scene_look.js";
-import { routineRowSummary, describeRoutineSchedule, formatRoutineTime12h } from "../src/routines.js";
+import { routineRowSummary } from "../src/routines.js";
 import { buildInspectorDescriptor, buildOverviewExceptions } from "../src/inspector.js";
 import { auraBackground } from "../src/components/aura.js";
 import {

@@ -70,19 +70,8 @@ export function routineRowSummary(routines) {
     const routine = list[0];
     const text = routine.schedule
       ? describeRoutineSchedule(routine.schedule)
-      : describeRoutineWeekdays(null);
+      : "1 routine"; // advanced: no safe temporal claim — neutral count text
     return { count: 1, text, hasAdvanced, allDisabled };
   }
   return { count: list.length, text: `${list.length} routines`, hasAdvanced, allDisabled };
-}
-
-/**
- * Sort key for routine lists in the editor: scheduled (native) routines by
- * time first, then advanced ones, then alias — deterministic and stable
- * across refreshes.
- */
-export function routineSortKey(routine) {
-  const time = routine.schedule && routine.schedule.time ? routine.schedule.time : "99:99";
-  const advanced = routine.classification === "recognized_advanced" ? 1 : 0;
-  return `${advanced}-${time}-${routine.alias || routine.automation_id}`;
 }

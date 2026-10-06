@@ -29,6 +29,7 @@ from scene_studio.domain.routines import (
     generate_routine_config,
     new_automation_id,
     parse_provenance,
+    validate_automation_id,
     validate_routine_time,
     validate_routine_weekdays,
 )
@@ -366,10 +367,4 @@ def test_validate_routine_weekdays():
 def test_new_automation_id_shape():
     automation_id = new_automation_id("ABCDEF012345")
     assert automation_id == "ssr_abcdef012345"
-    assert automation_id == validate_automation_id_shape(automation_id)
-
-
-def validate_automation_id_shape(value: str) -> str:
-    from scene_studio.domain.routines import validate_automation_id
-
-    return validate_automation_id(value)
+    assert automation_id == validate_automation_id(automation_id)

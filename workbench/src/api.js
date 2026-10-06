@@ -926,7 +926,7 @@ export function createMockSceneStudioClient(baseData, options = {}) {
     const content = JSON.stringify([
       routine.automation_id, routine.alias, routine.scene_id, routine.behavior,
       routine.schedule && routine.schedule.time, routine.schedule && routine.schedule.weekdays,
-      routine.enabled === false ? "off" : "on", routine.unsupported_reasons || [],
+      routine.unsupported_reasons || [],
     ]);
     let hash = 5381;
     for (let i = 0; i < content.length; i += 1) hash = ((hash * 33) ^ content.charCodeAt(i)) >>> 0;
@@ -2102,7 +2102,6 @@ export function createMockSceneStudioClient(baseData, options = {}) {
     "routine.enable": (params) => {
       const routine = requireEditableRoutine(params);
       routine.enabled = true;
-      routine.source_digest = routineDigest(routine);
       pushEvent({
         level: "info",
         category: "automation",
@@ -2116,7 +2115,6 @@ export function createMockSceneStudioClient(baseData, options = {}) {
     "routine.disable": (params) => {
       const routine = requireEditableRoutine(params);
       routine.enabled = false;
-      routine.source_digest = routineDigest(routine);
       pushEvent({
         level: "info",
         category: "automation",

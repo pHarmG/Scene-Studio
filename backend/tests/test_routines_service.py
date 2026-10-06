@@ -343,11 +343,41 @@ def test_update_rejects_when_ha_changed_since_load():
     gateway.configs["ssr_aaaabbbbcccc"]["trigger"][0]["at"] = "21:00:00"
     with pytest.raises(RoutineSourceChanged) as excinfo:
         service.update(automation_id="ssr_aaaabbbbcccc", source_digest=stale_digest,
-                       time_hhmm="20:00", scene_lookup=None)
+                       time_hhmm="20:00", scene_lookup=lambda _sid: ("Evening Glow", False))
     assert excinfo.value.current_digest == canonical_config_digest(gateway.configs["ssr_aaaabbbbcccc"])
     # nothing was overwritten
     assert gateway.configs["ssr_aaaabbbbcccc"]["trigger"][0]["at"] == "21:00:00"
     assert gateway.calls_of("save_automation_config") == []
+
+
+def test_unsafe_automation_id_is_rejected_before_any_transport_call():
+    """The id reaches the gateway's URL path — it must satisfy the safe
+    charset before any HA contact (no traversal / query injection)."""
+    gateway = FakeHaAutomationGateway(configs={})
+    service, _ = make_service(gateway)
+    for unsafe in ("../../api/services/light/turn_on", "x?redirect=y", "a b", "", "x" * 65):
+        with pytest.raises(Exception) as excinfo:
+            service.delete(automation_id=unsafe, source_digest="d")
+        assert not isinstance(excinfo.value, RoutineCapabilityUnavailable)
+    assert gateway.calls == []  # the gateway was never touched
+
+
+def test_update_preserves_ha_level_settings():
+    """HA-level settings the grammar tolerates without modeling
+    (initial_state, icon) survive a Workbench edit."""
+    gateway = FakeHaAutomationGateway(configs={"ssr_aaaabbbbcccc": routine_config()})
+    gateway.configs["ssr_aaaabbbbcccc"]["initial_state"] = True
+    gateway.configs["ssr_aaaabbbbcccc"]["icon"] = "mdi:weather-night"
+    service, lookup = make_service(gateway)
+    digest = canonical_config_digest(gateway.configs["ssr_aaaabbbbcccc"])
+    service.update(
+        automation_id="ssr_aaaabbbbcccc", source_digest=digest,
+        time_hhmm="21:00", scene_lookup=lookup,
+    )
+    stored = gateway.configs["ssr_aaaabbbbcccc"]
+    assert stored["initial_state"] is True
+    assert stored["icon"] == "mdi:weather-night"
+    assert stored["trigger"][0]["at"] == "21:00:00"  # the edit itself applied
 
 
 def test_update_round_trips_supported_fields():
@@ -372,7 +402,8 @@ def test_update_refuses_advanced_automation():
     service, _ = make_service(gateway)
     digest = canonical_config_digest(advanced_config)
     with pytest.raises(RoutineNotEditable) as excinfo:
-        service.update(automation_id="user_advanced", source_digest=digest, time_hhmm="20:00")
+        service.update(automation_id="user_advanced", source_digest=digest, time_hhmm="20:00",
+                       scene_lookup=lambda _sid: ("Evening Glow", False))
     assert excinfo.value.reasons
     assert gateway.calls_of("save_automation_config") == []
 
@@ -381,7 +412,8 @@ def test_update_refuses_when_automation_vanished():
     gateway = FakeHaAutomationGateway(configs={})
     service, _ = make_service(gateway)
     with pytest.raises(RoutineSourceChanged):
-        service.update(automation_id="gone", source_digest="whatever", time_hhmm="20:00")
+        service.update(automation_id="gone", source_digest="whatever", time_hhmm="20:00",
+                       scene_lookup=lambda _sid: ("Evening Glow", False))
 
 
 # ---------------------------------------------------------------------------

@@ -31,17 +31,20 @@ follows with a fresh catalog read anyway.
 from __future__ import annotations
 
 import threading
+import time
 from typing import Callable
 
 from ..domain.routines import (
     CLASSIFICATION_ADVANCED,
     CLASSIFICATION_NATIVE,
     RoutineProjection,
+    classify_automation,
     RoutineSchedule,
     canonical_config_digest,
     describe_schedule,
     generate_routine_config,
     new_automation_id,
+    validate_automation_id,
     validate_routine_behavior,
     validate_routine_time,
     validate_routine_weekdays,
@@ -53,6 +56,10 @@ __all__ = ["RoutineService", "ROUTINE_CACHE_TTL_SECONDS"]
 ROUTINE_CACHE_TTL_SECONDS = 30.0
 
 _CONFLICT_KIND = "routine_source_changed"
+
+
+def _default_monotonic() -> float:
+    return time.monotonic()
 
 
 class RoutineCapabilityUnavailable(RuntimeError):
@@ -105,14 +112,7 @@ class RoutineService:
         self._cached_routines: list[RoutineProjection] | None = None
         self._cached_at_monotonic: float | None = None
         self._cached_refreshed_at: str | None = None
-        self._unavailable_reason: str | None = None
-        self._monotonic = self._default_monotonic
-
-    @staticmethod
-    def _default_monotonic() -> float:
-        import time
-
-        return time.monotonic()
+        self._monotonic = _default_monotonic
 
     # -- events -----------------------------------------------------------
 
@@ -128,7 +128,7 @@ class RoutineService:
             self._cached_routines = None
             self._cached_at_monotonic = None
 
-    def catalog(self, *, refresh: bool = False, now_monotonic: float | None = None) -> dict:
+    def catalog(self, *, refresh: bool = False) -> dict:
         """The derived routine projection for the Workbench.
 
         Bounded TTL cache; ``refresh=True`` forces a HA re-read (the
@@ -151,7 +151,7 @@ class RoutineService:
                 "stale": False,
             }
         with self._lock:
-            now = now_monotonic if now_monotonic is not None else self._monotonic()
+            now = self._monotonic()
             cached = self._cached_routines
             fresh = (
                 cached is not None
@@ -210,7 +210,7 @@ class RoutineService:
                 continue
             if config is None:
                 continue  # config vanished between the two reads; next refresh settles it
-            projection = _classify(
+            projection = classify_automation(
                 config,
                 automation_id=entity.automation_id,
                 entity_id=entity.entity_id,
@@ -236,11 +236,13 @@ class RoutineService:
             raise RoutineCapabilityUnavailable(reason or "Home Assistant automation management is unavailable")
         return gateway
 
-    def _recheck_concurrency(self, gateway: HaAutomationGateway, automation_id: str, source_digest: str | None) -> dict:
+    def _recheck_concurrency(self, gateway: HaAutomationGateway, automation_id: str, source_digest: str) -> dict:
         """Re-fetch the canonical config immediately before a write and
         verify the editor's digest still matches. Returns the fresh config.
-        ``source_digest=None`` is only valid for automations that do not
-        exist (create/delete-idempotency paths)."""
+        The automation id is validated here — every mutating command's id
+        flows into a gateway URL path, so it must satisfy the safe charset
+        before any transport is touched."""
+        validate_automation_id(automation_id)
         try:
             config = gateway.get_automation_config(automation_id)
         except HaAutomationGatewayError as exc:
@@ -248,14 +250,12 @@ class RoutineService:
         if config is None:
             raise RoutineSourceChanged(automation_id, "")
         current = canonical_config_digest(config)
-        if source_digest is not None and current != source_digest:
+        if current != source_digest:
             raise RoutineSourceChanged(automation_id, current)
         return config
 
     def _require_native(self, config: dict, automation_id: str) -> RoutineProjection:
-        from ..domain.routines import classify_automation
-
-        projection = _classify(config, automation_id=automation_id)
+        projection = classify_automation(config, automation_id=automation_id)
         if projection is None:
             raise RoutineNotEditable(automation_id, ["automation no longer references Scene Studio"])
         if projection.classification != CLASSIFICATION_NATIVE:
@@ -297,7 +297,7 @@ class RoutineService:
             raise RoutineVerificationFailed(f"could not re-read automation after write: {exc.message}") from exc
         if config is None:
             raise RoutineVerificationFailed(f"automation {automation_id!r} did not persist in Home Assistant")
-        projection = _classify(config, automation_id=automation_id)
+        projection = classify_automation(config, automation_id=automation_id)
         if projection is None or projection.classification != CLASSIFICATION_NATIVE:
             raise RoutineVerificationFailed(
                 f"automation {automation_id!r} did not round-trip through the routine grammar"
@@ -417,11 +417,11 @@ class RoutineService:
         weekdays=...,
         behavior: str | None = None,
         scene_id: str | None = None,
-        scene_lookup: Callable[[str], tuple[str, bool] | None] | None = None,
+        scene_lookup: Callable[[str], tuple[str, bool] | None],
     ) -> dict:
         """Update one native routine (``routine.update``) with optimistic
         concurrency on ``source_digest``. Only supported-grammar fields are
-        touched; the automation must still classify as native."""
+        regenerated; the automation must still classify as native."""
         gateway = self._require_gateway()
         config = self._recheck_concurrency(gateway, automation_id, source_digest)
         current = self._require_native(config, automation_id)
@@ -430,18 +430,14 @@ class RoutineService:
         new_weekdays = (
             validate_routine_weekdays(weekdays, "params.weekdays")
             if weekdays is not ...
-            else (tuple(current.schedule.weekdays) if current.schedule.weekdays is not None else None)
+            else current.schedule.weekdays
         )
         new_behavior = validate_routine_behavior(behavior, "params.behavior") if behavior is not None else current.behavior
         new_scene_id = scene_id if scene_id is not None else current.scene_id
         if new_scene_id is None:
             raise RoutineNotEditable(automation_id, ["automation does not reference a Scene Studio scene"])
 
-        scene_name, _ = self._require_scene(
-            new_scene_id,
-            new_behavior,
-            scene_lookup or (lambda _sid: (current.alias or new_scene_id, True)),
-        )
+        scene_name, _ = self._require_scene(new_scene_id, new_behavior, scene_lookup)
         schedule = RoutineSchedule(time=new_time, weekdays=new_weekdays)
         replacement = generate_routine_config(
             automation_id=automation_id,
@@ -450,9 +446,13 @@ class RoutineService:
             behavior=new_behavior,
             schedule=schedule,
         )
-        # Preserve the HA-level id (authoritative) — generate_routine_config
-        # already embeds it. Nothing else of the old structure survives: a
-        # native routine is fully described by the grammar fields above.
+        # The edit regenerates the managed fields (alias/description/trigger/
+        # condition/action) but must never silently drop HA-level settings
+        # the grammar tolerates without modeling (user-set in the HA UI).
+        if isinstance(config.get("initial_state"), bool):
+            replacement["initial_state"] = config["initial_state"]
+        if isinstance(config.get("icon"), str) and config["icon"].strip():
+            replacement["icon"] = config["icon"]
         try:
             gateway.save_automation_config(automation_id, replacement)
         except HaAutomationGatewayError as exc:
@@ -483,11 +483,7 @@ class RoutineService:
         check. Advanced automations are never deletable from Scene Studio."""
         gateway = self._require_gateway()
         config = self._recheck_concurrency(gateway, automation_id, source_digest)
-        self._require_native(config, automation_id)
-        scene_id_hint = None
-        projection = _classify(config, automation_id=automation_id)
-        if projection is not None:
-            scene_id_hint = projection.scene_id
+        current = self._require_native(config, automation_id)
         try:
             gateway.delete_automation_config(automation_id)
         except HaAutomationGatewayError as exc:
@@ -499,7 +495,7 @@ class RoutineService:
             "info",
             "Scheduled scene routine removed",
             detail=f"deleted HA automation {automation_id}",
-            scene_id=scene_id_hint,
+            scene_id=current.scene_id,
         )
         return {"removed": True}
 
@@ -532,29 +528,14 @@ class RoutineService:
             detail=f"automation {automation_id} set to {'on' if enabled else 'off'}",
             scene_id=projection.scene_id,
         )
-        try:
-            fresh = self._verify_present(gateway, automation_id)
-            fresh.enabled = enabled
-            return self._finish(fresh)
-        except RoutineVerificationFailed:
-            # Config-level re-read is not needed to trust an entity state
-            # change; fall back to the pre-write projection with the new flag.
-            projection.enabled = enabled
-            return self._finish(projection)
+        # Verify-after-write for a toggle is the entity state read-back above
+        # (the stored config is untouched by turn_on/turn_off, so the config
+        # digest and the rest of the projection stand as re-checked).
+        projection.entity_id = entity_id
+        projection.enabled = enabled
+        return self._finish(projection)
 
 
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
-
-def _classify(config: dict, *, automation_id: str, entity_id: str | None = None,
-              entity_state: str | None = None, alias: str | None = None) -> RoutineProjection | None:
-    from ..domain.routines import classify_automation
-
-    return classify_automation(
-        config,
-        automation_id=automation_id,
-        entity_id=entity_id,
-        entity_state=entity_state,
-        alias=alias,
-    )
