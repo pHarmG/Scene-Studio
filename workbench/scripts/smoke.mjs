@@ -2836,6 +2836,67 @@ async function main() {
   await followUpdate(execution, '0.1.1', s => timed.push(s), fast);
   check('updates: unhealthy NEW build times out with explicit recovery state', timed.at(-1).recovery_required && timed.at(-1).message.includes('timed out'));
 
+  // Update UX pass: a healthy build that is NEITHER the target nor the
+  // previous one means the journal no longer describes reality — fail fast
+  // with a readable message instead of spinning to the 5-minute timeout.
+  execution.getStatus = async () => ({ engine: { ok: true }, product: { build: { version: '9.9.9' } } });
+  const diverged = [];
+  await followUpdate(execution, '0.1.1', s => diverged.push(s), fast);
+  check('updates: third-version outcome fails fast and names both versions',
+    diverged.at(-1).state === 'failed' && diverged.at(-1).recovery_required === undefined &&
+    diverged.at(-1).message.includes('9.9.9') && diverged.at(-1).message.includes('0.1.1'),
+    JSON.stringify(diverged.at(-1)));
+
+  // The companion journal keeps its last terminal state forever and is
+  // re-read on every boot/drawer open — a recorded success the running
+  // build and loaded bundle already reflect must never render as a fresh
+  // "Update complete" (the phantom behind the v0.2.0 confusion).
+  const { staleSucceededUpdate } = await import('../src/update_execution.js');
+  check('updates: stale-success detection — loaded bundle already the target',
+    staleSucceededUpdate({ state: 'succeeded', target_version: '0.2.0' }, '0.2.0', '0.2.0') === true);
+  check('updates: stale-success detection — journal contradicts the running build',
+    staleSucceededUpdate({ state: 'succeeded', target_version: '0.2.0' }, '0.1.2', '0.1.2') === true);
+  check('updates: stale-success detection — post-restart reload window stays live',
+    staleSucceededUpdate({ state: 'succeeded', target_version: '0.2.0' }, '0.2.0', '0.1.2') === false);
+  check('updates: stale-success detection — non-succeeded states are never stale',
+    staleSucceededUpdate({ state: 'downloading', target_version: '0.2.0' }, '0.2.0', '0.2.0') === false &&
+    staleSucceededUpdate(null, '0.2.0', '0.2.0') === false);
+
+  const divergedStore = createStore(Object.assign(createMockSceneStudioClient(baseData), {
+    mode: 'live',
+    getUpdateStatus: async () => ({ state: 'succeeded', target_version: '0.9.9', installed_version: '0.1.0' }),
+  }));
+  await divergedStore.init();
+  divergedStore.state.status = { engine: { ok: true }, product: { build: { version: '0.1.2' } } };
+  await divergedStore.inspectUpdate();
+  check('updates: a journal success that contradicts the running build is dropped (availability row is the truth)',
+    divergedStore.state.updateExecution === null);
+
+  const reloadWindowStore = createStore(Object.assign(createMockSceneStudioClient(baseData), {
+    mode: 'live',
+    getUpdateStatus: async () => ({ state: 'succeeded', target_version: '0.1.2', installed_version: '0.1.0' }),
+    getUpdateBuild: async () => ({ engine: { ok: true }, product: { build: { version: '0.1.2' } } }),
+  }));
+  await reloadWindowStore.init();
+  reloadWindowStore.state.status = { engine: { ok: true }, product: { build: { version: '0.1.2' } } };
+  await reloadWindowStore.inspectUpdate();
+  check('updates: backend restarted onto the target while the page is older — completion stays live for the reload',
+    reloadWindowStore.state.updateExecution?.state === 'succeeded' && reloadWindowStore.state.updateExecution?.target_version === '0.1.2');
+
+  const runningJournal = createStore(Object.assign(createMockSceneStudioClient(baseData), {
+    mode: 'live',
+    getUpdateStatus: (() => {
+      const states = [{ state: 'downloading', target_version: '0.2.0', installed_version: '0.1.2' },
+                      { state: 'failed', target_version: '0.2.0', installed_version: '0.1.2', message: 'Release verification failed.' }];
+      return async () => states.shift() || { state: 'failed' };
+    })(),
+  }));
+  await runningJournal.init();
+  runningJournal.state.status = { engine: { ok: true }, product: { build: { version: '0.1.2' } } };
+  await runningJournal.inspectUpdate();
+  check('updates: an in-flight journal is re-witnessed to its terminal state on boot',
+    runningJournal.state.updateExecution?.state === 'failed');
+
   let starts = 0, resolveStart;
   updateClient.startUpdate = target => { starts++; check('updates: browser sends only target identity', target === '0.1.1'); return new Promise(resolve => { resolveStart = resolve; }); };
   updateClient.getUpdateStatus = async () => ({ state: 'failed', rolled_back: true, message: 'Previous build restored.' });

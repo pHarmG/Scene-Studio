@@ -26,6 +26,25 @@ export function updateReloadUrl(state, loadedBuild, href, { allowDirty = false }
   return page.href;
 }
 
+/**
+ * Whether a supervisor journal reporting `succeeded` is OLD NEWS rather than
+ * a completion the user still needs to act on. The journal keeps its last
+ * terminal state forever, and the Workbench re-reads it on every boot and
+ * drawer open — re-displaying it as "Update complete" would be a phantom.
+ *
+ * A recorded success is stale when the RUNNING backend build does not match
+ * the journal's target (the journal no longer describes reality — the
+ * availability row is the truth then), or when the loaded Workbench bundle
+ * already IS the target (the update completed and was reloaded long ago).
+ * Only a journal whose target matches the running backend while the loaded
+ * bundle is still older is live news: the post-restart reload window.
+ */
+export function staleSucceededUpdate(status, liveBuildVersion, loadedBuildVersion) {
+  if (!status || status.state !== "succeeded" || !status.target_version) return false;
+  if (liveBuildVersion !== status.target_version) return true;
+  return loadedBuildVersion === status.target_version;
+}
+
 export async function followUpdate(client, target, changed, { timeout = 300000, interval = 1000,
   now = () => Date.now(), sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) } = {}) {
   const deadline = now() + timeout;
@@ -42,6 +61,13 @@ export async function followUpdate(client, target, changed, { timeout = 300000, 
         if (live.engine?.ok && live.product?.build?.version === target) return changed(status);
         if (live.engine?.ok && live.product?.build?.version === status.installed_version) {
           return changed({ state: "failed", rolled_back: true, message: "The previous build is running; the update was rolled back." });
+        }
+        if (live.engine?.ok) {
+          // A healthy third build neither the target nor the previous one:
+          // the journal no longer describes reality — say so immediately
+          // instead of spinning to the timeout.
+          return changed({ state: "failed", message:
+            `The running build (v${live.product?.build?.version}) is neither the target (v${target}) nor the previous build. Check System again or run the update again.` });
         }
       } else {
         changed(status.state === "idle" ? { state: "reconnecting", target_version: target,

@@ -538,6 +538,93 @@ class SsApp extends SsLightElement {
       color: var(--ss-text-dim);
       overflow-wrap: anywhere;
     }
+    /* Update section (update UX pass): one honest version story — the
+       availability row, one primary action pair, and a toned execution
+       card that only renders while there is something to act on. */
+    .update-state {
+      margin: 0 0 2px;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--ss-text);
+    }
+    .update-versions {
+      margin: 0 0 10px;
+      font-size: 14px;
+      color: var(--ss-text-dim);
+    }
+    .update-versions b {
+      color: var(--ss-text);
+      font-weight: 600;
+    }
+    .update-message {
+      margin: 0 0 10px;
+      font-size: 14px;
+      color: var(--ss-text-dim);
+    }
+    .update-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0 0 8px;
+    }
+    .update-apply {
+      font-weight: 600;
+    }
+    .update-notes {
+      margin: 0 0 4px;
+      font-size: 14px;
+    }
+    .update-confirmation {
+      margin: 4px 0 10px;
+      padding: 10px;
+      border: 1px solid var(--ss-border);
+      border-radius: var(--ss-radius-sm);
+      background: var(--ss-surface-2);
+    }
+    .update-confirmation p {
+      margin: 0 0 6px;
+      font-size: 14px;
+      color: var(--ss-text-dim);
+    }
+    .update-confirmation .confirm-target {
+      margin: 0 0 4px;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--ss-text);
+    }
+    .update-progress {
+      margin: 6px 0 10px;
+      padding: 10px;
+      border: 1px solid var(--ss-border);
+      border-left: 3px solid var(--ss-warn);
+      border-radius: var(--ss-radius-sm);
+      background: var(--ss-surface-2);
+    }
+    .update-progress.ok {
+      border-left-color: var(--ss-ok);
+    }
+    .update-progress.err {
+      border-left-color: var(--ss-err);
+    }
+    .update-progress strong {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 14px;
+      color: var(--ss-text);
+    }
+    .update-progress p {
+      margin: 0 0 6px;
+      font-size: 14px;
+      color: var(--ss-text-dim);
+    }
+    .update-progress .reload-note {
+      color: var(--ss-ok);
+    }
+    .update-hint {
+      margin: 2px 0 0;
+      font-size: 13px;
+      color: var(--ss-text-faint);
+    }
     .diagnostics-section {
       flex: 1;
       min-height: 0;
@@ -574,7 +661,8 @@ class SsApp extends SsLightElement {
     this._lastContentView = "overview";
     this._focusDiagnostics = false;
     this._beforeUnload = null;
-    this._updateReloadQueued = false;
+    this._updateReloadActive = false;
+    this._updateReloadTimer = null;
   }
 
   connectedCallback() {
@@ -624,19 +712,46 @@ class SsApp extends SsLightElement {
       window.removeEventListener("beforeunload", this._beforeUnload);
       this._beforeUnload = null;
     }
+    if (this._updateReloadTimer) {
+      clearTimeout(this._updateReloadTimer);
+      this._updateReloadTimer = null;
+      this._updateReloadActive = false;
+    }
     super.disconnectedCallback();
   }
 
   _reloadWorkbench(url) { window.location.replace(url); }
 
+  /**
+   * After a VERIFIED success the served bundle is new but this page still
+   * runs the old one — navigate as soon as the refreshed status shows the
+   * new build. The reload is real: attempts repeat on a short interval so
+   * the await gap between the execution landing and the post-update status
+   * refresh can never strand the user on the old bundle, and the panel's
+   * "Reload Workbench now" button remains as the manual fallback for the
+   * one environment where a scripted navigation cannot apply (a developer
+   * bundle pointed at a remote API — the guard updateReloadUrl encodes).
+   * Each attempt carries a fresh cache-busting build stamp, so the browser
+   * cannot serve the old index.html for the new URL.
+   */
   #maybeReloadUpdatedWorkbench() {
-    if (this._updateReloadQueued || !updateReloadUrl(this.store.state, localBuild, window.location.href)) return;
-    this._updateReloadQueued = true;
-    setTimeout(() => {
+    if (this._updateReloadActive) return;
+    if (!updateReloadUrl(this.store.state, localBuild, window.location.href)) return;
+    this._updateReloadActive = true;
+    const deadline = Date.now() + 15000;
+    const attempt = () => {
       const url = updateReloadUrl(this.store.state, localBuild, window.location.href);
-      if (url) this._reloadWorkbench(url);
-      else this._updateReloadQueued = false;
-    }, 250);
+      if (!url) {
+        // Either the loaded bundle now matches (done) or auto-reload cannot
+        // apply here (the panel's manual fallback button shows instead).
+        this._updateReloadActive = false;
+        return;
+      }
+      this._reloadWorkbench(url);
+      if (Date.now() < deadline) this._updateReloadTimer = setTimeout(attempt, 750);
+      else this._updateReloadActive = false;
+    };
+    this._updateReloadTimer = setTimeout(attempt, 250);
   }
 
   /**
@@ -832,26 +947,47 @@ class SsApp extends SsLightElement {
 
   #renderUpdate(s) {
     const update = s.updateCheck || s.status?.product?.update || { state: "unchecked" };
+    const label = updateLabels[update.state] || "Check unavailable";
+    // The backend check echoes the state label on the happy paths ("Update
+    // available.") — render the message only when it adds information.
+    const messageExtra = !!update.message &&
+      update.message.toLowerCase().replace(/[.\s]+$/g, "") !== label.toLowerCase().replace(/[.\s]+$/g, "");
+    const execution = s.updateExecution && s.updateExecution.state !== "idle" ? s.updateExecution : null;
+    // The new bundle is live on the server but this page still runs the old
+    // one: the auto-reloader navigates (with retries); this button is the
+    // visible fallback for environments where a scripted navigation cannot
+    // apply (the same guard updateReloadUrl encodes for dev bundles).
+    const reloadPending = execution?.state === "succeeded" &&
+      !!s.status?.engine?.ok && s.status?.product?.build?.version !== localBuild.version;
+    const companionHint = execution?.state === "failed" ||
+      update.state === "unchecked" || update.state === "unavailable" || update.state === "error";
     return html`
-      <p class="update-state" role="status">${updateLabels[update.state] || "Check unavailable"}</p>
-      <p>${update.message || "Updates have not been checked."}</p>
-      ${update.latest_version ? html`<p>Installed: v${s.status?.product?.build?.version || "unknown"} · Latest: v${update.latest_version}</p>` : ""}
-      <button class="ss-btn" ?disabled=${update.state === "checking"} @click=${() => this.store.checkUpdates()}>Check for updates</button>
-      ${update.release_url ? html`<p><a href=${update.release_url} target="_blank" rel="noopener noreferrer">${update.state === "available" ? "Release notes" : "Open GitHub Releases"}</a></p>` : ""}
-      ${update.state === "available" ? html`<button class="ss-btn update-apply" ?disabled=${!!s.updateConfirmation || updateRunning(s.updateExecution) || s.updateExecution?.recovery_required} @click=${() => this.store.reviewUpdate()}>Update</button>` : ""}
+      <p class="update-state" role="status">${label}</p>
+      ${update.latest_version
+        ? html`<p class="update-versions">Installed <b>v${s.status?.product?.build?.version || "unknown"}</b> · Latest <b>v${update.latest_version}</b></p>`
+        : messageExtra ? html`<p class="update-message">${update.message}</p>` : ""}
+      <div class="update-actions">
+        <button class="ss-btn" ?disabled=${update.state === "checking"} @click=${() => this.store.checkUpdates()}>Check for updates</button>
+        ${update.state === "available" ? html`<button class="ss-btn update-apply" ?disabled=${!!s.updateConfirmation || updateRunning(s.updateExecution) || s.updateExecution?.recovery_required} @click=${() => this.store.reviewUpdate()}>Update to v${update.latest_version}</button>` : ""}
+      </div>
+      ${update.release_url ? html`<p class="update-notes"><a href=${update.release_url} target="_blank" rel="noopener noreferrer">${update.state === "available" ? "Release notes" : "Open GitHub Releases"}</a></p>` : ""}
       ${s.updateConfirmation ? html`<div class="update-confirmation" role="dialog" aria-label="Confirm Scene Studio update">
-        <p>Installed: v${s.updateConfirmation.installed}</p><p>Target: v${s.updateConfirmation.target}</p>
+        <p class="confirm-target">Installed: v${s.updateConfirmation.installed} → Target: v${s.updateConfirmation.target}</p>
         <p>Scene Studio executable and static files will be replaced. User scenes, stores and configuration are preserved. AppDaemon will restart.</p>
-        <button class="ss-btn update-confirm" @click=${() => this.store.confirmUpdate()}>Confirm update</button>
-        <button class="ss-btn" @click=${() => this.store.cancelUpdate()}>Cancel</button>
+        <div class="update-actions">
+          <button class="ss-btn update-confirm" @click=${() => this.store.confirmUpdate()}>Confirm update</button>
+          <button class="ss-btn" @click=${() => this.store.cancelUpdate()}>Cancel</button>
+        </div>
       </div>` : ""}
-      ${s.updateExecution && s.updateExecution.state !== "idle" ? html`<div class="update-progress" role="status">
-        <strong>${s.updateExecution.rolled_back ? "Update rolled back" : executionLabels[s.updateExecution.state] || "Update status"}</strong>
-        <p>${s.updateExecution.message || ""}</p>
+      ${execution ? html`<div class="update-progress ${execution.state === "succeeded" ? "ok" : execution.state === "failed" ? "err" : ""}" role="status">
+        <strong>${execution.rolled_back ? "Update rolled back" : executionLabels[execution.state] || "Update status"}</strong>
+        ${reloadPending ? html`<p class="reload-note">Reloading the updated Workbench…</p>` : ""}
+        ${execution.message ? html`<p>${execution.message}</p>` : ""}
         ${s.builder?.dirty && updateReloadUrl(s, localBuild, window.location.href, { allowDirty: true }) ? html`<p>Save or discard your draft to reload the updated Workbench.</p>` : ""}
-        ${s.updateExecution.recovery_required ? html`<button class="ss-btn" @click=${() => this.store.inspectUpdate()}>Refresh update status</button>` : ""}
+        ${reloadPending ? html`<button class="ss-btn" @click=${() => window.location.reload()}>Reload Workbench now</button>` : ""}
+        ${execution.recovery_required ? html`<button class="ss-btn" @click=${() => this.store.inspectUpdate()}>Refresh update status</button>` : ""}
       </div>` : ""}
-      <p>Updates require the independent update companion provisioned by the guided installer.</p>
+      ${companionHint ? html`<p class="update-hint">Updates require the independent update companion provisioned by the guided installer.</p>` : ""}
     `;
   }
 

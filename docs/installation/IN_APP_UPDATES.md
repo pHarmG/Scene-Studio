@@ -62,3 +62,17 @@ external installer before in-app Update is available. Provisioning changes
 two companion files and the managed apps.yaml block and restarts AppDaemon;
 it is a live write requiring the operator's approval. This foundation does
 not deploy itself to the developer's live host.
+
+Workbench display semantics (update UX pass): the journal is a record of
+the LAST transaction, so a terminal `succeeded` entry persists after the
+update it describes has long been reloaded. The Workbench therefore treats
+a recorded success as historical once the running backend build and the
+loaded Workbench bundle both reflect the journal's target — the Update
+row (checked availability) stays the single live version story. A recorded
+success is displayed only in the one window that needs action: the backend
+restarted onto the new build while the open page still runs the old
+bundle. That reload is real and observable — the page navigates to the
+fresh build stamp with bounded retries, and the panel shows a manual
+"Reload Workbench now" fallback. A healthy running build that is neither
+the target nor the previous build fails the follow-up immediately with a
+readable explanation instead of spinning to the recovery timeout.

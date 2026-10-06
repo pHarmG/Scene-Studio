@@ -539,9 +539,14 @@ async function main() {
         app().requestUpdate();
         await app().updateComplete;
         const section = root().querySelector('.update-section');
+        const hintVisible = ['unchecked', 'unavailable', 'error'].includes(state);
         updateStates.push(section.querySelector('.update-state')?.textContent === label &&
           section.querySelector('button').disabled === (state === 'checking') &&
-          (state !== 'available' || section.textContent.includes('Release notes')));
+          (state !== 'available' || section.textContent.includes('Release notes')) &&
+          // Update UX pass: the companion hint renders only where it informs,
+          // and the status label is a single line (no duplicated banner).
+          section.textContent.includes('update companion') === hintVisible &&
+          section.querySelectorAll('.update-state').length === 1);
       }
       app().store.state.updateCheck = null;
       app().requestUpdate();
@@ -590,12 +595,24 @@ async function main() {
       app.store.state.updateExecution = {state:'failed',rolled_back:true,message:'Previous healthy build restored.'};
       app.requestUpdate(); await app.updateComplete;
       const rollback = root.querySelector('.update-progress')?.textContent.includes('Update rolled back');
+      // Update UX pass: a verified success whose served build is newer than
+      // the loaded bundle shows the reload explicitly — a real navigation
+      // with retries plus this manual fallback, never a silent no-op.
+      app.store.state.updateExecution = {state:'succeeded', target_version:'9.9.9', message:'controlled executor fixture'};
+      const previousBuild = app.store.state.status?.product?.build;
+      app.store.state.status = { engine: { ok: true }, product: { build: { version: '9.9.9', source_sha: 'x', source_tree_sha256: 'y' } } };
+      app.requestUpdate(); await app.updateComplete;
+      const progress = root.querySelector('.update-progress');
+      const reloadNote = progress?.textContent.includes('Reloading the updated Workbench…');
+      const reloadButton = [...(progress?.querySelectorAll('button') || [])].some((b) => b.textContent.trim() === 'Reload Workbench now');
+      app.store.state.status = previousBuild;
       app.store.state.updateCheck = null; app.store.state.updateExecution = null;
       root.querySelector('ss-drawer[floating] .system-head .close').click();
       await app.updateComplete;
-      return {available,confirmation,mockRejected,stages,rollback};
+      return {available,confirmation,mockRejected,stages,rollback,reloadNote,reloadButton};
     })()`);
     check('updates: available, explicit confirmation, all execution phases and rollback render', updateExecution?.available && updateExecution?.confirmation && updateExecution?.mockRejected && updateExecution?.stages.every(Boolean) && updateExecution?.rollback, JSON.stringify(updateExecution));
+    check('updates: verified success shows the real reload (note + manual fallback button)', updateExecution?.reloadNote === true && updateExecution?.reloadButton === true, JSON.stringify(updateExecution));
     // Palette is the only fixture-look hierarchy, including empty palettes.
     // Update success must replace the executing JavaScript, not only the status label.
     const staticReconnect = await evaluate(`(async () => {

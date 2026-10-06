@@ -15,7 +15,8 @@
  */
 
 import { createHttpSceneStudioClient } from "./api.js";
-import { followUpdate, updateRunning } from "./update_execution.js";
+import { localBuild } from "./product.js";
+import { followUpdate, staleSucceededUpdate, updateRunning } from "./update_execution.js";
 import { canonicalizeStaticPalette } from "./palette_assign.js";
 import { normalizePlayback, sessionById } from "./playback.js";
 
@@ -596,6 +597,17 @@ export function createStore(client) {
       try {
         const status = await source.getUpdateStatus();
         if (source !== active) return;
+        // The companion journal keeps its last terminal state forever and is
+        // re-read on every boot/drawer open. A recorded success that the
+        // running build and the loaded bundle already reflect is OLD NEWS —
+        // dropping it keeps the availability row (the live truth) as the
+        // only version story, and no phantom "Update complete" renders.
+        if (status.state === "succeeded" &&
+            staleSucceededUpdate(status, state.status?.product?.build?.version, localBuild.version)) {
+          state.updateExecution = null;
+          notify();
+          return;
+        }
         state.updateExecution = status.state === "succeeded" ? { ...status, state: "verifying_new_build" } : status;
         notify();
         if (updateRunning(status) || status.state === "succeeded") {
