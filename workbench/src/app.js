@@ -42,6 +42,7 @@ import { SsLightElement } from "./components/ss-light-element.js";
 import "./components/ss-status-glyph.js";
 import "./components/ss-inspector.js";
 import "./components/ss-drawer.js";
+import "./components/ss-adopt-modal.js";
 import "./views/overview.js";
 import "./views/fixtures.js";
 import "./views/scenes.js";
@@ -146,6 +147,7 @@ class SsApp extends SsLightElement {
     connTransport: { state: true },
     connEndpoint: { state: true },
     systemOpen: { state: true },
+    adoptOpen: { state: true },
   };
 
   static styles = css`
@@ -649,6 +651,7 @@ class SsApp extends SsLightElement {
     this.connTransport = "direct";
     this.connEndpoint = DEFAULT_ENDPOINT_NAME;
     this.systemOpen = false;
+    this.adoptOpen = false;
     this.inspectorReview = null;
     // Diagnostics-navigation shim (Stage 2 corrective pass §2): "diagnostics"
     // was a real main-content view pre-Stage-2; it no longer renders as one
@@ -1106,6 +1109,9 @@ class SsApp extends SsLightElement {
         ? "warn"
         : "ok";
     const inboxCount = discoveryOpenCount(s);
+    // Adopt pass: the header prompt exists ONLY while the routine projection
+    // carries adoptable legacy automations — no candidates, no icon.
+    const adoptables = ((s.routines && s.routines.routines) || []).filter((r) => r.adoptable === true);
 
     return html`
       <header class="top">
@@ -1133,6 +1139,25 @@ class SsApp extends SsLightElement {
             </svg>
             ${inboxCount ? html`<span class="badge">${inboxCount}</span>` : ""}
           </button>
+          ${adoptables.length
+            ? html`
+                <button
+                  class="icon-btn ${this.adoptOpen ? "active" : ""}"
+                  title="Found in Home Assistant: automations to adopt"
+                  aria-label=${`Adopt Home Assistant automations (${adoptables.length} found)`}
+                  @click=${() => {
+                    this.adoptOpen = !this.adoptOpen;
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 3v10" />
+                    <path d="M8 9l4 4 4-4" />
+                    <path d="M4 15v4h16v-4" />
+                  </svg>
+                  <span class="badge">${adoptables.length}</span>
+                </button>
+              `
+            : ""}
           <button
             class="icon-btn ${this.systemOpen ? "active" : ""}"
             title="System (connection, scenario, diagnostics)"
@@ -1177,6 +1202,9 @@ class SsApp extends SsLightElement {
               </div>
             </div>
           `
+        : ""}
+      ${this.adoptOpen
+        ? html`<ss-adopt-modal .store=${this.store} @adopt-close=${() => { this.adoptOpen = false; }}></ss-adopt-modal>`
         : ""}
       <main class=${descriptor ? "" : "no-inspector"}>
         <div class="content">

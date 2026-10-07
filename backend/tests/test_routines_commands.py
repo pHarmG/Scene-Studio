@@ -72,7 +72,7 @@ def make_engine(store, gateway=None, mode=MODE_NORMAL):
 
 def test_routine_commands_are_registered():
     assert {
-        "routine.create", "routine.update", "routine.delete",
+        "routine.create", "routine.update", "routine.adopt", "routine.delete",
         "routine.enable", "routine.disable",
     } <= set(COMMAND_CATALOG)
 
@@ -123,7 +123,7 @@ def test_routine_update_params_require_digest_and_keep_weekdays_sentinel():
 
 
 def test_routine_addressed_commands_require_digest():
-    for command in ("routine.delete", "routine.enable", "routine.disable"):
+    for command in ("routine.adopt", "routine.delete", "routine.enable", "routine.disable"):
         with pytest.raises(ValidationError, match="source_digest"):
             parse_command({"command": command, "automation_id": "ssr_x"})
 
@@ -364,3 +364,79 @@ def test_routines_route_projects_ha_state(store):
     assert payload2["refreshed_at"] is not None
     unknown = route(engine, "GET", f"{ROUTE_PREFIX}/routines", query={"refresh": "bogus"})
     assert unknown[0] == 200  # non-flag values are simply not a refresh
+
+
+# ---------------------------------------------------------------------------
+# routine.adopt (legacy wrapper pass)
+# ---------------------------------------------------------------------------
+
+
+LEGACY_WRAPPER_ID = "1733947344161"
+
+
+def legacy_wrapper_config():
+    return {
+        "id": LEGACY_WRAPPER_ID,
+        "alias": "Apply Meeting Blue Scene at 7 AM",
+        "description": "Weekday 7 AM Meeting Blue through the canonical Scene Studio bridge.",
+        "mode": "single",
+        "trigger": [{"at": "07:00:00", "trigger": "time"}],
+        "condition": [{"condition": "time", "weekday": ["mon", "tue", "wed", "thu", "fri"]}],
+        "action": [{"action": "script.scene_studio_apply", "data": {"scene_id": "twilight"}}],
+    }
+
+
+def test_routine_adopt_params_require_digest():
+    _, params = parse_command({"command": "routine.adopt", "automation_id": "ssr_x", "source_digest": "abcd"})
+    assert params.automation_id == "ssr_x"
+    with pytest.raises(ValidationError, match="source_digest"):
+        parse_command({"command": "routine.adopt", "automation_id": "ssr_x"})
+
+
+def test_routine_adopt_not_on_card_bridge_allowlist():
+    assert not UI_BRIDGE_ALLOWLIST & {"routine.create", "routine.adopt", "routine.update"}
+
+
+def test_engine_adopt_converts_legacy_wrapper(store):
+    gateway = FakeHaAutomationGateway(configs={LEGACY_WRAPPER_ID: legacy_wrapper_config()})
+    engine = make_engine(store, gateway=gateway)
+    digest = canonical_config_digest(gateway.configs[LEGACY_WRAPPER_ID])
+    result = engine.handle({
+        "command": "routine.adopt", "automation_id": LEGACY_WRAPPER_ID, "source_digest": digest,
+    })
+    assert result["ok"] is True, result
+    routine = result["data"]["routine"]
+    assert routine["classification"] == "native_routine"
+    assert routine["adoptable"] is False
+    assert routine["scene_id"] == "twilight"
+    assert routine["schedule"]["time"] == "07:00"
+    saved = gateway.configs[LEGACY_WRAPPER_ID]
+    assert saved["action"] == [{
+        "event": "scene_studio_ui_command",
+        "event_data": {"command": "scene.apply", "scene_id": "twilight"},
+    }]
+    # A retry with the CURRENT digest after adoption is refused: the
+    # automation is now native, no longer adoptable.
+    retry = engine.handle({
+        "command": "routine.adopt", "automation_id": LEGACY_WRAPPER_ID,
+        "source_digest": canonical_config_digest(gateway.configs[LEGACY_WRAPPER_ID]),
+    })
+    assert retry["ok"] is False and retry["error"]["code"] == "conflict"
+    assert retry["error"]["details"]["kind"] == "routine_advanced"
+    # And a stale-digest retry is the structured concurrency conflict.
+    stale = engine.handle({
+        "command": "routine.adopt", "automation_id": LEGACY_WRAPPER_ID, "source_digest": digest,
+    })
+    assert stale["ok"] is False and stale["error"]["details"]["kind"] == "routine_source_changed"
+
+
+def test_engine_adopt_conflicts_on_ha_side_change(store):
+    gateway = FakeHaAutomationGateway(configs={LEGACY_WRAPPER_ID: legacy_wrapper_config()})
+    engine = make_engine(store, gateway=gateway)
+    gateway.configs[LEGACY_WRAPPER_ID]["trigger"][0]["at"] = "08:00:00"
+    result = engine.handle({
+        "command": "routine.adopt", "automation_id": LEGACY_WRAPPER_ID, "source_digest": "stale",
+    })
+    assert result["ok"] is False and result["error"]["code"] == "conflict"
+    assert result["error"]["details"]["kind"] == "routine_source_changed"
+    assert gateway.configs[LEGACY_WRAPPER_ID]["trigger"][0]["at"] == "08:00:00"

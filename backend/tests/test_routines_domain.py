@@ -25,6 +25,7 @@ from scene_studio.domain.routines import (
     classify_automation,
     describe_schedule,
     find_bridge_reference,
+    find_legacy_script_reference,
     format_time_12h,
     generate_routine_config,
     new_automation_id,
@@ -403,3 +404,98 @@ def test_new_automation_id_shape():
     automation_id = new_automation_id("ABCDEF012345")
     assert automation_id == "ssr_abcdef012345"
     assert automation_id == validate_automation_id(automation_id)
+
+
+# ---------------------------------------------------------------------------
+# legacy script-wrapper recognition (adopt pass)
+# ---------------------------------------------------------------------------
+
+
+def legacy_wrapper_config(
+    *,
+    at: str = "07:00:00",
+    weekdays=("mon", "tue", "wed", "thu", "fri"),
+    scene_id: str = "meeting_blue",
+    automation_id: str = "1733947344161",
+    alias: str = "Apply Meeting Blue Scene at 7 AM",
+) -> dict:
+    """The pre-Workbench wrapper era, in the shape the live house carries:
+    modern plural trigger key, a weekday time condition, and ONE action —
+    the `script.scene_studio_apply` service call."""
+    config = {
+        "id": automation_id,
+        "alias": alias,
+        "description": "Weekday 7 AM Meeting Blue through the canonical Scene Studio bridge.",
+        "mode": "single",
+        "trigger": [{"at": at, "trigger": "time"}],
+        "action": [{"action": "script.scene_studio_apply", "data": {"scene_id": scene_id}}],
+    }
+    if weekdays is not None:
+        config["condition"] = [{"condition": "time", "weekday": list(weekdays)}]
+    return config
+
+
+def test_legacy_apply_wrapper_recognized_as_adoptable_advanced():
+    projection = classify(legacy_wrapper_config())
+    assert projection is not None
+    assert projection.classification == CLASSIFICATION_ADVANCED
+    assert projection.adoptable is True
+    assert projection.scene_id == "meeting_blue"
+    assert projection.behavior == "apply"
+    assert projection.schedule == RoutineSchedule(time="07:00", weekdays=("mon", "tue", "wed", "thu", "fri"))
+    assert any("script.scene_studio_apply" in reason for reason in projection.unsupported_reasons)
+    assert projection.to_dict()["adoptable"] is True
+
+
+def test_legacy_wrapper_on_singular_storage_era_recognized():
+    config = {
+        "id": "old_wrapper",
+        "alias": "Morning Meeting Blue",
+        "trigger": [{"platform": "time", "at": "07:00"}],
+        "action": [{"service": "script.scene_studio_apply", "data": {"scene_id": "meeting_blue"}}],
+    }
+    projection = classify(config)
+    assert projection is not None and projection.adoptable is True
+    assert projection.schedule == RoutineSchedule(time="07:00", weekdays=None)
+
+
+def test_legacy_wrapper_with_templated_scene_id_is_invisible():
+    config = legacy_wrapper_config(scene_id="{{ states('input_text.morning_scene') }}")
+    assert classify(config) is None
+    assert find_legacy_script_reference(config) is None
+
+
+def test_legacy_wrapper_without_readable_schedule_is_not_adoptable():
+    config = legacy_wrapper_config(at="sunset")
+    projection = classify(config)
+    assert projection is not None
+    assert projection.scene_id == "meeting_blue"
+    assert projection.adoptable is False
+    assert projection.schedule is None
+    assert any("whole-minute" in reason for reason in projection.unsupported_reasons)
+
+
+def test_native_routine_is_never_adoptable():
+    projection = classify(native_config())
+    assert projection.classification == CLASSIFICATION_NATIVE
+    assert projection.adoptable is False
+
+
+def test_target_power_wrapper_stays_invisible():
+    config = {
+        "id": "office_off",
+        "alias": "Office Lights Off",
+        "trigger": [],
+        "action": [{"action": "script.scene_studio_target_power", "data": {"target_id": "sunroom", "action": "off"}}],
+    }
+    assert classify(config) is None
+
+
+def test_find_legacy_script_reference_scans_nested_structure():
+    config = {
+        "id": "wrapped",
+        "actions": [
+            {"choose": [{"actions": [{"action": "script.scene_studio_apply", "data": {"scene_id": "wind_down"}}]}]},
+        ],
+    }
+    assert find_legacy_script_reference(config) == "wind_down"

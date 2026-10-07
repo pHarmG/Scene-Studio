@@ -216,6 +216,7 @@ const PARAM_SPECS = {
     optional: { time: "str", weekdays: "strListOrNull", behavior: "str", scene_id: "str" },
   },
   "routine.delete": { required: { automation_id: "str", source_digest: "str" }, optional: {} },
+  "routine.adopt": { required: { automation_id: "str", source_digest: "str" }, optional: {} },
   "routine.enable": { required: { automation_id: "str", source_digest: "str" }, optional: {} },
   "routine.disable": { required: { automation_id: "str", source_digest: "str" }, optional: {} },
 };
@@ -230,7 +231,7 @@ const MUTATING = new Set([
   "fixture.set_contention_policy", "sync.suspend", "sync.resume",
   "discovery.run",
   "fixture.adopt", "target.create", "target.update",
-  "routine.create", "routine.update", "routine.delete", "routine.enable", "routine.disable",
+  "routine.create", "routine.update", "routine.adopt", "routine.delete", "routine.enable", "routine.disable",
 ]);
 
 /**
@@ -263,7 +264,7 @@ const NORMAL_COMMANDS = [
   "discovery.run", "diagnostics.export",
   // HA-native routine CRUD (routines pass): normal mode only, mirroring
   // service/policy.py (restricted modes reject external-system writes).
-  "routine.create", "routine.update", "routine.delete", "routine.enable", "routine.disable",
+  "routine.create", "routine.update", "routine.adopt", "routine.delete", "routine.enable", "routine.disable",
 ];
 
 function mockRuntime(scenarioId) {
@@ -937,9 +938,13 @@ export function createMockSceneStudioClient(baseData, options = {}) {
   // from the shared DOM-free routines module (src/routines.js) so mock and
   // live UI text can never drift.
 
-  const seededRoutine = (scene, { behavior, time, weekdays, classification = "native_routine", alias = null, unsupported_reasons = [] }) => {
+  const seededRoutine = (scene, { behavior, time, weekdays, classification = "native_routine", alias = null, unsupported_reasons = [], adoptable = false, schedule = null }) => {
     routineSeq += 1;
-    const automationId = classification === "native_routine" ? `ssr_mock${String(routineSeq).padStart(8, "0")}` : `user_advanced_${routineSeq}`;
+    const automationId = classification === "native_routine"
+      ? `ssr_mock${String(routineSeq).padStart(8, "0")}`
+      : adoptable
+        ? `17339000000${routineSeq}`
+        : `user_advanced_${routineSeq}`;
     const routine = {
       automation_id: automationId,
       entity_id: `automation.${automationId.replace(/-/g, "_")}`,
@@ -948,9 +953,13 @@ export function createMockSceneStudioClient(baseData, options = {}) {
       classification,
       scene_id: scene.id,
       behavior,
-      schedule: classification === "native_routine" ? { time, weekdays: weekdays ? [...weekdays] : null } : null,
+      // An adoptable legacy wrapper carries its real parsed schedule (the
+      // backend derives it from the automation's own time trigger); plain
+      // advanced projections stay schedule-less.
+      schedule: classification === "native_routine" ? { time, weekdays: weekdays ? [...weekdays] : null } : schedule,
       provenance: classification === "native_routine" ? { schema: 1, scene_id: scene.id, behavior } : null,
       unsupported_reasons,
+      adoptable,
     };
     routine.source_digest = routineDigest(routine);
     return routine;
@@ -971,6 +980,23 @@ export function createMockSceneStudioClient(baseData, options = {}) {
         behavior: "apply",
         classification: "recognized_advanced",
         unsupported_reasons: ["automation has multiple actions", "unsupported trigger platform 'state'"],
+      }));
+    }
+    // The pre-Workbench wrapper era the adopt pass targets (routines pass):
+    // a user-created HA automation scheduling a scene through
+    // `script.scene_studio_apply` — recognized, shown in the adopt modal,
+    // read-only until adopted.
+    const meetingBlue = scenes.find((s) => s.id === "meeting_blue");
+    if (meetingBlue) {
+      routineStore.push(seededRoutine(meetingBlue, {
+        behavior: "apply",
+        classification: "recognized_advanced",
+        alias: "Apply Meeting Blue Scene at 7 AM",
+        adoptable: true,
+        schedule: { time: "07:00", weekdays: ["mon", "tue", "wed", "thu", "fri"] },
+        unsupported_reasons: [
+          "action calls the legacy 'script.scene_studio_apply' wrapper; adopt to manage this routine from Scene Studio",
+        ],
       }));
     }
   };
@@ -2097,6 +2123,46 @@ export function createMockSceneStudioClient(baseData, options = {}) {
         scene_id: routine.scene_id,
       });
       return { data: { removed: true } };
+    },
+
+    "routine.adopt": (params) => {
+      // Adopt pass: only the recognized legacy-wrapper subset is adoptable.
+      // Conversion mirrors RoutineService.adopt: keep id + discovered
+      // schedule, regenerate everything else into the canonical create form.
+      const routine = findRoutine(params.automation_id);
+      if (!routine) {
+        throw new CommandFailure("conflict", "Home Assistant changed this automation since it was loaded; refresh the routines and reapply your edit.", {
+          kind: "routine_source_changed", automation_id: params.automation_id, current_digest: "",
+        });
+      }
+      if (params.source_digest !== routine.source_digest) {
+        throw new CommandFailure("conflict", "Home Assistant changed this automation since it was loaded; refresh the routines and reapply your edit.", {
+          kind: "routine_source_changed", automation_id: params.automation_id, current_digest: routine.source_digest,
+        });
+      }
+      if (routine.classification !== "recognized_advanced" || routine.adoptable !== true) {
+        throw new CommandFailure("conflict", `automation '${routine.automation_id}' is not an adoptable legacy Scene Studio automation`, {
+          kind: "routine_advanced", automation_id: routine.automation_id,
+          unsupported_reasons: routine.unsupported_reasons || [],
+        });
+      }
+      const scene = data.scenes.scenes.find((s) => s.id === routine.scene_id);
+      if (!scene) throw new CommandFailure("not_found", `scene '${routine.scene_id}' not found`);
+      routine.classification = "native_routine";
+      routine.adoptable = false;
+      routine.behavior = "apply";
+      routine.alias = routineAlias(scene.name, routine.schedule.time, routine.schedule.weekdays);
+      routine.provenance = { schema: 1, scene_id: routine.scene_id, behavior: "apply" };
+      routine.unsupported_reasons = [];
+      routine.source_digest = routineDigest(routine);
+      pushEvent({
+        level: "info",
+        category: "automation",
+        summary: `Adopted '${routine.alias}' · ${describeRoutineWeekdays(routine.schedule.weekdays)} ${formatRoutineTime12h(routine.schedule.time)}`,
+        detail: `adopted legacy automation ${routine.automation_id} into the native routine grammar (apply ${routine.scene_id})`,
+        scene_id: routine.scene_id,
+      });
+      return { data: { routine: clone(routine) } };
     },
 
     "routine.enable": (params) => {

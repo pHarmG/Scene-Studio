@@ -654,10 +654,10 @@ export class SsRoutinePopover extends LitElement {
         <div class="routine advanced">
           <div class="head">
             <span class="advanced-tag">Advanced</span>
-            <span class="when">${routine.alias || routine.automation_id}</span>
+            <span class="when">${routine.schedule ? describeRoutineSchedule(routine.schedule) : (routine.alias || routine.automation_id)}</span>
           </div>
           <div class="detail">
-            ${routine.behavior === "play" ? "Plays" : "Applies"} ${routine.scene_id}
+            ${routine.behavior === "play" ? "Plays" : "Applies"} ${routine.alias || routine.scene_id}
             ${routine.enabled ? "" : "· off"}
           </div>
           ${routine.unsupported_reasons && routine.unsupported_reasons.length
@@ -667,9 +667,14 @@ export class SsRoutinePopover extends LitElement {
                 </ul>
               `
             : ""}
-          <div class="ha-note">
-            Managed in Home Assistant — Scene Studio reads it but never edits it.
-          </div>
+          ${routine.adoptable
+            ? html`<div class="ha-note">
+                Recognized legacy automation — adopt it from the ⤓ prompt in the
+                header to edit its schedule here.
+              </div>`
+            : html`<div class="ha-note">
+                Managed in Home Assistant — Scene Studio reads it but never edits it.
+              </div>`}
         </div>
       `;
     }

@@ -295,6 +295,7 @@ class SceneStudioEngine:
             "diagnostics.export": self._diagnostics_export,
             "routine.create": self._routine_create,
             "routine.update": self._routine_update,
+            "routine.adopt": self._routine_adopt,
             "routine.delete": self._routine_delete,
             "routine.enable": self._routine_enable,
             "routine.disable": self._routine_disable,
@@ -3117,6 +3118,16 @@ class SceneStudioEngine:
                 weekdays=params.weekdays,
                 behavior=params.behavior,
                 scene_id=params.scene_id,
+                scene_lookup=self._routine_scene_lookup,
+            ),
+        )
+
+    def _routine_adopt(self, envelope: CommandEnvelope, params) -> CommandResult:
+        return self._routine_mutation(
+            envelope,
+            lambda service: service.adopt(
+                automation_id=params.automation_id,
+                source_digest=params.source_digest,
                 scene_lookup=self._routine_scene_lookup,
             ),
         )

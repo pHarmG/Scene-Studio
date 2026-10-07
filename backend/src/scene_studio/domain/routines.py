@@ -28,6 +28,15 @@ supported bridge event classifies as a native routine even when it carries no
 Scene Studio provenance. Provenance (a versioned marker in the automation
 description) is informative only — never the recognition test.
 
+Legacy wrappers (adopt pass): automations that schedule a scene through the
+pre-Workbench HA script indirection — ``script.scene_studio_apply`` with a
+literal ``scene_id`` — are RECOGNIZED as ``recognized_advanced`` projections
+carrying the linked scene and their parsed schedule, flagged ``adoptable``.
+They stay read-only through Scene Studio until an explicit
+``routine.adopt`` regenerates them into the canonical native form; a wrapper
+whose ``scene_id`` is a template is not attributable to a scene and stays
+invisible, like any unrelated automation.
+
 The normalized ``source_digest`` is the concurrency token: callers re-fetch
 immediately before every mutation and compare digests, so an automation that
 changed in HA since it was loaded is reported as a conflict instead of being
@@ -48,6 +57,7 @@ __all__ = [
     "ROUTINE_SCHEMA_VERSION",
     "ROUTINE_AUTOMATION_ID_PREFIX",
     "SUPPORTED_BRIDGE_COMMANDS",
+    "LEGACY_APPLY_WRAPPER_SCRIPT",
     "WEEKDAYS",
     "CLASSIFICATION_NATIVE",
     "CLASSIFICATION_ADVANCED",
@@ -59,6 +69,7 @@ __all__ = [
     "classify_automation",
     "describe_schedule",
     "find_bridge_reference",
+    "find_legacy_script_reference",
     "format_time_12h",
     "generate_routine_config",
     "new_automation_id",
@@ -83,6 +94,13 @@ ROUTINE_AUTOMATION_ID_PREFIX = "ssr_"
 # Bridge command -> routine behavior. The values are the canonical
 # `behavior` strings of the routine projection.
 SUPPORTED_BRIDGE_COMMANDS = {"scene.apply": "apply", "playback.start": "play"}
+
+# Pre-Workbench HA script wrapper that fires the canonical bridge event from
+# HA-side automations (``/config/scripts.yaml``). Automations scheduling a
+# scene through it are recognized as adoptable advanced projections — see
+# the module docstring. Only the apply wrapper carries a scene_id; the
+# target_power wrapper is target-addressed and never scene-attributable.
+LEGACY_APPLY_WRAPPER_SCRIPT = "script.scene_studio_apply"
 
 # HA weekday strings in canonical order.
 WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
@@ -140,6 +158,11 @@ class RoutineProjection:
     ``recognized_advanced`` (references Scene Studio but exceeds the grammar;
     visible/readable, never rewritten). Automations without any Scene Studio
     bridge reference produce NO projection at all — they are not routines.
+
+    ``adoptable`` marks the recognized legacy-script-wrapper subset
+    (``script.scene_studio_apply`` with a literal ``scene_id`` and a readable
+    whole-minute schedule): still advanced/read-only, but eligible for the
+    explicit ``routine.adopt`` conversion into the native grammar.
     """
 
     automation_id: str
@@ -153,6 +176,7 @@ class RoutineProjection:
     provenance: dict | None = None   # {"schema", "scene_id", "behavior"} when present
     source_digest: str = ""
     unsupported_reasons: list[str] = field(default_factory=list)
+    adoptable: bool = False
 
     def to_dict(self) -> dict:
         out: dict = {
@@ -166,6 +190,7 @@ class RoutineProjection:
             "schedule": self.schedule.to_dict() if self.schedule is not None else None,
             "provenance": dict(self.provenance) if self.provenance else None,
             "source_digest": self.source_digest,
+            "adoptable": self.adoptable,
         }
         if self.unsupported_reasons:
             out["unsupported_reasons"] = list(self.unsupported_reasons)
@@ -325,6 +350,47 @@ def find_bridge_reference(config: dict) -> tuple[str, str] | None:
     return _loose_bridge_reference(config)
 
 
+_TEMPLATE_RE = re.compile(r"\{\{|\{%")
+
+
+def _is_literal_str(value) -> bool:
+    """A plain string carrying no HA template — the only shape attributable
+    to a scene without evaluating Jinja (which the projection never does)."""
+    return isinstance(value, str) and bool(value.strip()) and _TEMPLATE_RE.search(value) is None
+
+
+def _loose_legacy_script_reference(node, depth: int = 0) -> str | None:
+    """Recursive scan for the legacy ``script.scene_studio_apply`` service
+    call with a LITERAL ``scene_id`` — the pre-Workbench wrapper era. Only
+    that wrapper is recognized (the target_power wrapper is target-addressed,
+    never scene-attributable); templated scene ids stay invisible."""
+    if depth > 8:
+        return None
+    if isinstance(node, dict):
+        call = node.get("action") if isinstance(node.get("action"), str) else node.get("service")
+        if call == LEGACY_APPLY_WRAPPER_SCRIPT:
+            data = node.get("data")
+            if isinstance(data, dict) and _is_literal_str(data.get("scene_id")):
+                return data["scene_id"].strip()
+        for value in node.values():
+            found = _loose_legacy_script_reference(value, depth + 1)
+            if found is not None:
+                return found
+        return None
+    if isinstance(node, list):
+        for item in node:
+            found = _loose_legacy_script_reference(item, depth + 1)
+            if found is not None:
+                return found
+    return None
+
+
+def find_legacy_script_reference(config: dict) -> str | None:
+    """The literal ``scene_id`` when the automation schedules a scene through
+    the legacy ``script.scene_studio_apply`` wrapper, else ``None``."""
+    return _loose_legacy_script_reference(config)
+
+
 # ---------------------------------------------------------------------------
 # classification
 # ---------------------------------------------------------------------------
@@ -440,9 +506,15 @@ def classify_automation(
     if not isinstance(config, dict):
         return None
     reference = find_bridge_reference(config)
+    legacy_scene_id = None
     if reference is None:
-        return None
-    behavior_ref, scene_id_ref = reference
+        # The pre-Workbench wrapper era: an automation scheduling a scene
+        # through `script.scene_studio_apply` is recognized (adoptable
+        # advanced) rather than invisible. Template scene ids stay invisible.
+        legacy_scene_id = find_legacy_script_reference(config)
+        if legacy_scene_id is None:
+            return None
+    behavior_ref, scene_id_ref = reference if reference is not None else ("apply", legacy_scene_id)
     digest = canonical_config_digest(config)
     display_alias = alias if isinstance(alias, str) and alias.strip() else (
         config.get("alias") if isinstance(config.get("alias"), str) and config.get("alias").strip()
@@ -478,6 +550,22 @@ def classify_automation(
         elif isinstance(actions, list):
             reasons.append("automation has no actions")
 
+    # Legacy wrapper path: never native (the action is a script call, not the
+    # bridge event), but adoptable when the schedule is fully readable — the
+    # adopt mutation regenerates the whole config FROM that schedule.
+    legacy_schedule = None
+    adoptable = False
+    if legacy_scene_id is not None:
+        reasons.append(
+            f"action calls the legacy {LEGACY_APPLY_WRAPPER_SCRIPT!r} wrapper; "
+            "adopt to manage this routine from Scene Studio"
+        )
+        if time_value is not None and weekdays is not False:
+            legacy_schedule = RoutineSchedule(time=time_value, weekdays=weekdays)
+        else:
+            reasons.append("trigger does not carry a readable whole-minute time schedule")
+        adoptable = legacy_schedule is not None
+
     native = (
         time_value is not None
         and weekdays is not False
@@ -510,10 +598,11 @@ def classify_automation(
         entity_id=entity_id,
         scene_id=scene_id_ref,
         behavior=behavior_ref,
-        schedule=None,
+        schedule=legacy_schedule,
         provenance=provenance,
         source_digest=digest,
         unsupported_reasons=reasons or ["automation structure exceeds the supported routine grammar"],
+        adoptable=adoptable,
     )
 
 

@@ -593,6 +593,18 @@ class RoutineDeleteParams(RoutineAddressedParams):
     """Delete one native routine (native_routine classification only)."""
 
 
+class RoutineAdoptParams(RoutineAddressedParams):
+    """Adopt one recognized legacy automation into the native routine grammar.
+
+    Only projections flagged ``adoptable`` (the recognized
+    ``script.scene_studio_apply`` wrapper era with a readable schedule) are
+    eligible; the conversion regenerates the automation into the canonical
+    form ``routine.create`` produces, keeping the automation id and the
+    discovered schedule. ``source_digest`` carries the usual optimistic
+    concurrency token.
+    """
+
+
 class RoutineEnableParams(RoutineAddressedParams):
     """Enable one native routine."""
 
@@ -641,6 +653,7 @@ COMMAND_CATALOG: dict[str, Any] = {
     "diagnostics.export": ExportDiagnosticsParams,
     "routine.create": RoutineCreateParams,  # native HA automation over the supported grammar
     "routine.update": RoutineUpdateParams,  # concurrency-checked native routine edit
+    "routine.adopt": RoutineAdoptParams,  # convert a recognized legacy wrapper automation to native
     "routine.delete": RoutineDeleteParams,  # remove a native routine from HA
     "routine.enable": RoutineEnableParams,
     "routine.disable": RoutineDisableParams,

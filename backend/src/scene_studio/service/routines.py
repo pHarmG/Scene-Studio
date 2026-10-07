@@ -478,6 +478,75 @@ class RoutineService:
                 f"automation {projection.automation_id!r} did not round-trip the requested change"
             )
 
+    def adopt(
+        self,
+        *,
+        automation_id: str,
+        source_digest: str,
+        scene_lookup: Callable[[str], tuple[str, bool] | None],
+    ) -> dict:
+        """Adopt one recognized legacy automation (``routine.adopt``).
+
+        The target must classify as an ``adoptable`` advanced projection —
+        the recognized ``script.scene_studio_apply`` wrapper era with a
+        readable whole-minute schedule. Adoption modernizes the automation
+        into the SAME canonical form ``routine.create`` generates (bridge
+        event action, Scene Studio alias + provenance description, singular
+        storage keys) while keeping the automation id and the discovered
+        schedule, and preserving HA-level extras the grammar tolerates
+        (icon/initial_state). Same discipline as every mutation:
+        read-first/source_digest concurrency, verify-after-write, reload.
+        """
+        gateway = self._require_gateway()
+        config = self._recheck_concurrency(gateway, automation_id, source_digest)
+        current = classify_automation(config, automation_id=automation_id)
+        if current is None:
+            raise RoutineNotEditable(automation_id, ["automation does not reference Scene Studio"])
+        if current.adoptable is False:
+            if current.classification == CLASSIFICATION_NATIVE:
+                raise RoutineNotEditable(automation_id, ["automation is already a native routine"])
+            raise RoutineNotEditable(
+                automation_id,
+                current.unsupported_reasons or ["automation is not a recognized legacy Scene Studio automation"],
+            )
+        if current.schedule is None or current.behavior != "apply" or not current.scene_id:
+            raise RoutineNotEditable(
+                automation_id,
+                ["automation does not expose a readable whole-minute schedule; it cannot be adopted"],
+            )
+        scene_name, _ = self._require_scene(current.scene_id, "apply", scene_lookup)
+        replacement = generate_routine_config(
+            automation_id=automation_id,
+            scene_id=current.scene_id,
+            scene_name=scene_name,
+            behavior="apply",
+            schedule=current.schedule,
+        )
+        # HA-level settings the grammar tolerates without modeling survive
+        # adoption, exactly like a native-routine update (update()).
+        if isinstance(config.get("initial_state"), bool):
+            replacement["initial_state"] = config["initial_state"]
+        if isinstance(config.get("icon"), str) and config["icon"].strip():
+            replacement["icon"] = config["icon"]
+        try:
+            gateway.save_automation_config(automation_id, replacement)
+        except HaAutomationGatewayError as exc:
+            raise RoutineCapabilityUnavailable(f"HA refused the automation adopt: {exc.message}") from exc
+        warning = self._reload(gateway)
+        projection = self._verify_present(gateway, automation_id)
+        self._verify_round_trip(projection, current.schedule, "apply", current.scene_id)
+        self.invalidate()
+        self._event(
+            "info",
+            f"Adopted '{current.alias}' · {describe_schedule(current.schedule)}",
+            detail=(
+                f"adopted legacy automation {automation_id} into the native routine grammar "
+                f"(apply {current.scene_id})"
+            ),
+            scene_id=current.scene_id,
+        )
+        return self._finish(projection, warning)
+
     def delete(self, *, automation_id: str, source_digest: str) -> dict:
         """Delete one native routine (``routine.delete``) with concurrency
         check. Advanced automations are never deletable from Scene Studio."""

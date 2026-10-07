@@ -602,3 +602,110 @@ def test_scene_rename_updates_aliases_only_on_next_edit():
     )
     assert updated["routine"]["alias"] == "Scene Studio · Evening Glow (renamed) · Weekdays 7:30 PM"
     assert updated["routine"]["scene_id"] == "evening_glow"
+
+
+# ---------------------------------------------------------------------------
+# adopt (legacy script-wrapper pass)
+# ---------------------------------------------------------------------------
+
+
+def legacy_wrapper_config(
+    *, at: str = "07:00:00", weekdays=("mon", "tue", "wed", "thu", "fri"), scene_id: str = "meeting_blue",
+    automation_id: str = "1733947344161", icon=None, initial_state=None,
+) -> dict:
+    config = {
+        "id": automation_id,
+        "alias": "Apply Meeting Blue Scene at 7 AM",
+        "description": "Weekday 7 AM Meeting Blue through the canonical Scene Studio bridge.",
+        "mode": "single",
+        "trigger": [{"at": at, "trigger": "time"}],
+        "action": [{"action": "script.scene_studio_apply", "data": {"scene_id": scene_id}}],
+    }
+    if weekdays is not None:
+        config["condition"] = [{"condition": "time", "weekday": list(weekdays)}]
+    if icon is not None:
+        config["icon"] = icon
+    if initial_state is not None:
+        config["initial_state"] = initial_state
+    return config
+
+
+def test_adopt_converts_legacy_wrapper_to_native_form():
+    gateway = FakeHaAutomationGateway(configs={"legacy_1": legacy_wrapper_config()})
+    service, lookup = make_service(gateway, scenes={"meeting_blue": ("Meeting Blue", False)})
+    digest = canonical_config_digest(gateway.configs["legacy_1"])
+    result = service.adopt(automation_id="legacy_1", source_digest=digest, scene_lookup=lookup)
+    routine = result["routine"]
+    # The adopted automation is the SAME canonical form routine.create generates.
+    assert routine["classification"] == CLASSIFICATION_NATIVE
+    assert routine["adoptable"] is False
+    assert routine["scene_id"] == "meeting_blue" and routine["behavior"] == "apply"
+    assert routine["schedule"] == {"time": "07:00", "weekdays": ["mon", "tue", "wed", "thu", "fri"]}
+    saved = gateway.configs["legacy_1"]
+    assert saved["action"] == [{
+        "event": "scene_studio_ui_command",
+        "event_data": {"command": "scene.apply", "scene_id": "meeting_blue"},
+    }]
+    assert saved["alias"].startswith("Scene Studio · Meeting Blue ·")
+    assert "Scene Studio routine (schema" in saved["description"]
+    assert saved["trigger"] == [{"platform": "time", "at": "07:00:00"}]
+    assert saved["condition"] == [{"condition": "time", "weekday": ["mon", "tue", "wed", "thu", "fri"]}]
+    assert gateway.calls_of("save_automation_config") and gateway.calls_of("reload_automations")
+
+
+def test_adopt_preserves_ha_level_settings():
+    config = legacy_wrapper_config(icon="mdi:weather-sunset", initial_state=False)
+    gateway = FakeHaAutomationGateway(configs={"legacy_1": config})
+    service, lookup = make_service(gateway, scenes={"meeting_blue": ("Meeting Blue", False)})
+    digest = canonical_config_digest(config)
+    service.adopt(automation_id="legacy_1", source_digest=digest, scene_lookup=lookup)
+    saved = gateway.configs["legacy_1"]
+    assert saved["icon"] == "mdi:weather-sunset"
+    assert saved["initial_state"] is False
+
+
+def test_adopt_refuses_native_routine():
+    gateway = FakeHaAutomationGateway(configs={"ssr_x": routine_config()})
+    service, _ = make_service(gateway)
+    digest = canonical_config_digest(gateway.configs["ssr_x"])
+    with pytest.raises(RoutineNotEditable) as excinfo:
+        service.adopt(automation_id="ssr_x", source_digest=digest, scene_lookup=lambda _sid: ("Evening Glow", False))
+    assert "already a native routine" in excinfo.value.reasons[0]
+    assert gateway.calls_of("save_automation_config") == []
+
+
+def test_adopt_refuses_non_adoptable_advanced_automation():
+    gateway = FakeHaAutomationGateway(configs={"user_advanced": advanced_config})
+    service, _ = make_service(gateway)
+    digest = canonical_config_digest(advanced_config)
+    with pytest.raises(RoutineNotEditable) as excinfo:
+        service.adopt(automation_id="user_advanced", source_digest=digest, scene_lookup=lambda _sid: ("Evening Glow", False))
+    assert excinfo.value.reasons
+    assert gateway.calls_of("save_automation_config") == []
+
+
+def test_adopt_refuses_wrapper_without_readable_schedule():
+    config = legacy_wrapper_config(at="sunset")
+    gateway = FakeHaAutomationGateway(configs={"legacy_1": config})
+    service, lookup = make_service(gateway, scenes={"meeting_blue": ("Meeting Blue", False)})
+    digest = canonical_config_digest(config)
+    with pytest.raises(RoutineNotEditable):
+        service.adopt(automation_id="legacy_1", source_digest=digest, scene_lookup=lookup)
+    assert gateway.calls_of("save_automation_config") == []
+
+
+def test_adopt_is_conflict_when_ha_changed_since_load():
+    gateway = FakeHaAutomationGateway(configs={"legacy_1": legacy_wrapper_config()})
+    service, lookup = make_service(gateway, scenes={"meeting_blue": ("Meeting Blue", False)})
+    with pytest.raises(RoutineSourceChanged):
+        service.adopt(automation_id="legacy_1", source_digest="stale", scene_lookup=lookup)
+
+
+def test_adopt_refuses_unknown_scene():
+    gateway = FakeHaAutomationGateway(configs={"legacy_1": legacy_wrapper_config()})
+    service, _ = make_service(gateway)  # default scene map lacks meeting_blue
+    digest = canonical_config_digest(gateway.configs["legacy_1"])
+    with pytest.raises(KeyError):
+        service.adopt(automation_id="legacy_1", source_digest=digest,
+                      scene_lookup=lambda _sid: None)
+    assert gateway.calls_of("save_automation_config") == []

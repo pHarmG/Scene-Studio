@@ -432,6 +432,91 @@ async function main() {
     })()`);
     check("scenes panel: Pause/Resume still route through the shared seam", !!scenesFlow && scenesFlow.paused && scenesFlow.resumed, JSON.stringify(scenesFlow));
 
+    // 2.5. Applied static scene in the live panel: with no live session, the
+    //      panel shows the scene the fixtures are holding (status `current`)
+    //      as the hero card — and the hero yields once a session runs.
+    const staticFlow = await evaluate(`(async () => {
+      const app = () => document.querySelector("ss-app");
+      const store = app().store;
+      store.setView("scenes");
+      await store.setScenario("all-healthy");
+      const panelRoot = () => dom(dom(dom(app()).querySelector("ss-view-scenes")).querySelector("ss-playback-panel"));
+      const currentHero = () => panelRoot() && panelRoot().querySelector(".current-hero");
+      const waitFor = async (fn, ms = 6000) => {
+        const t0 = Date.now();
+        while (Date.now() - t0 < ms) {
+          try { const v = fn(); if (v) return v; } catch {}
+          await new Promise((r) => setTimeout(r, 60));
+        }
+        return null;
+      };
+      const scene = (store.state.scenes.scenes || []).find((sc) => !(sc.metadata && sc.metadata.archived_at));
+      if (!scene) return { fail: "no active scene in the catalog" };
+      await store.sendCommand({ command: "scene.apply", scene_id: scene.id });
+      const hero = await waitFor(() => currentHero());
+      if (!hero) return { fail: "applied scene hero did not render in the idle panel" };
+      const title = hero.querySelector(".hero-title");
+      if (!title || title.textContent.trim() !== scene.name) return { fail: "hero shows the wrong scene name", expected: scene.name };
+      const eyebrow = hero.querySelector(".hero-eyebrow");
+      if (!eyebrow || !/current/i.test(eyebrow.textContent)) return { fail: "hero lacks the Current eyebrow" };
+      if (!hero.querySelector(".hero-band")) return { fail: "hero lacks the palette band" };
+      // A running session owns the fixtures — the static hero must yield.
+      await store.setScenario("multi-session");
+      const yielded = await waitFor(() => !currentHero() && panelRoot().querySelectorAll("ss-playback-session").length >= 1);
+      if (!yielded) return { fail: "static hero did not yield to a live session" };
+      return { nameShown: true, eyebrowShown: true, bandShown: true, yielded: true };
+    })()`);
+    check(
+      "scenes panel: applied static scene shows as the hero when idle and yields to live sessions",
+      !!staticFlow && staticFlow.nameShown && staticFlow.eyebrowShown && staticFlow.bandShown && staticFlow.yielded,
+      JSON.stringify(staticFlow)
+    );
+
+    // 2.6. Adopt pass: the header prompt exists ONLY while adoptable legacy
+    //      automations are projected; the modal adopts and both disappear.
+    const adoptFlow = await evaluate(`(async () => {
+      const app = () => document.querySelector("ss-app");
+      const store = app().store;
+      store.setView("scenes");
+      await store.setScenario("all-healthy");
+      const header = () => app().querySelector("header.top");
+      const adoptBtn = () => [...header().querySelectorAll(".icon-btn")].find((b) => (b.getAttribute("title") || "").startsWith("Found in Home Assistant"));
+      const waitFor = async (fn, ms = 6000) => {
+        const t0 = Date.now();
+        while (Date.now() - t0 < ms) {
+          try { const v = fn(); if (v) return v; } catch {}
+          await new Promise((r) => setTimeout(r, 60));
+        }
+        return null;
+      };
+      if (!(await waitFor(() => adoptBtn()))) return { fail: "adopt prompt did not appear for the seeded legacy wrapper" };
+      adoptBtn().click();
+      const modal = () => document.querySelector("ss-adopt-modal");
+      const modalRoot = () => modal() && dom(modal());
+      if (!(await waitFor(() => modalRoot() && modalRoot().querySelector('[data-ss="adopt-item"]'))))
+        return { fail: "adopt modal did not render the candidate" };
+      const when = modalRoot().querySelector(".item .when");
+      const alias = modalRoot().querySelector(".item .alias");
+      const modalAdopt = () => modalRoot().querySelector('[data-ss="adopt-button"]');
+      if (!modalAdopt() || modalAdopt().disabled) return { fail: "no enabled Adopt button in the modal" };
+      modalAdopt().click();
+      const done = await waitFor(() => !adoptBtn() && !modal());
+      if (!done) return { fail: "adopt did not complete (prompt/modal still present)" };
+      const wrapper = (store.state.routines.routines || []).find((r) => r.scene_id === "meeting_blue");
+      return {
+        when: when && when.textContent.trim(),
+        alias: alias && alias.textContent.trim(),
+        classification: wrapper && wrapper.classification,
+        adoptable: wrapper && wrapper.adoptable,
+      };
+    })()`);
+    check(
+      "adopt: header prompt + modal convert the legacy wrapper and disappear",
+      !!adoptFlow && !adoptFlow.fail && adoptFlow.when === "Weekdays 7:00 AM" &&
+        adoptFlow.classification === "native_routine" && adoptFlow.adoptable === false,
+      JSON.stringify(adoptFlow)
+    );
+
     // 3. Scene-row labels across live states: the glyph must never claim
     //    "playing"; the runtime tag owns the state wording.
     const rowLabels = await evaluate(`(async () => {

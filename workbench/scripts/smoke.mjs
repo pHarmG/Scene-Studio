@@ -2628,6 +2628,25 @@ async function main() {
       check(`routine.${label}: advanced automation refused (routine_advanced)`, res.ok === false && res.error.code === "conflict" && res.error.details.kind === "routine_advanced", JSON.stringify(res.error));
     }
 
+    // adopt pass: the recognized legacy wrapper is visible, adoptable, and
+    // converts into the canonical native form (id + schedule preserved).
+    const wrapper = seeded.find((r) => r.scene_id === "meeting_blue" && r.adoptable === true);
+    check("routines: legacy wrapper seeded adoptable with its real schedule", !!wrapper && wrapper.classification === "recognized_advanced" && !!wrapper.schedule && wrapper.schedule.time === "07:00" && wrapper.schedule.weekdays.join(",") === "mon,tue,wed,thu,fri", JSON.stringify(wrapper));
+    const adoptStale = await client.sendCommand({ command: "routine.adopt", automation_id: wrapper.automation_id, source_digest: "stale" });
+    check("routine.adopt: stale digest -> structured routine_source_changed conflict", adoptStale.ok === false && adoptStale.error.code === "conflict" && adoptStale.error.details.kind === "routine_source_changed");
+    const adopted = await client.sendCommand({ command: "routine.adopt", automation_id: wrapper.automation_id, source_digest: wrapper.source_digest });
+    check(
+      "routine.adopt: converts to the native grammar keeping id + schedule",
+      adopted.ok === true && adopted.data.routine.classification === "native_routine" && adopted.data.routine.adoptable === false &&
+        adopted.data.routine.schedule.time === "07:00" && adopted.data.routine.schedule.weekdays.join(",") === "mon,tue,wed,thu,fri",
+      JSON.stringify(adopted.data)
+    );
+    check("routine.adopt: alias modernized to the canonical shape", adopted.data.routine.alias === "Scene Studio · Meeting Blue · Weekdays 7:00 AM", adopted.data.routine && adopted.data.routine.alias);
+    const reAdopt = await client.sendCommand({ command: "routine.adopt", automation_id: wrapper.automation_id, source_digest: adopted.data.routine.source_digest });
+    check("routine.adopt: already-native refusal (routine_advanced)", reAdopt.ok === false && reAdopt.error.code === "conflict" && reAdopt.error.details.kind === "routine_advanced", JSON.stringify(reAdopt.error));
+    const afterAdopt = await client.getRoutines();
+    check("routine.adopt: projection no longer advertises the wrapper", afterAdopt.routines.every((r) => r.adoptable !== true));
+
     // runtime policy: restricted modes reject routine writes (mirrors policy.py)
     const adminClient = createMockSceneStudioClient(baseData, { scenarioId: "empty-registry" });
     const adminStatus = await adminClient.getStatus();
@@ -2643,7 +2662,8 @@ async function main() {
     check("store: routinesForScene groups by scene_id (native + advanced)", forScene.length === 2 && forScene.every((r) => r.scene_id === "aurora_flow"));
     const routineCreateRes = await store.sendCommand({ command: "routine.create", scene_id: "meeting_blue", behavior: "apply", time: "21:00", weekdays: ["mon", "thu"] });
     check("store: routine.create through sendCommand ok", routineCreateRes.ok === true);
-    check("store: post-command refresh re-reads routines", store.routinesForScene("meeting_blue").length === 1);
+    // meeting_blue: the created routine + the seeded adoptable legacy wrapper.
+    check("store: post-command refresh re-reads routines", store.routinesForScene("meeting_blue").length === 2);
     check("store: routine notice is human-readable", /Scheduled/.test((store.state.notice && store.state.notice.text) || ""));
   }
 
