@@ -1467,6 +1467,44 @@ async function main() {
       !!routineFlipFlow && routineFlipFlow.open === true && routineFlipFlow.within === true && routineFlipFlow.flipped === true,
       JSON.stringify(routineFlipFlow)
     );
+    // Live-host regression (v0.2.2 report): the DEFAULT tall viewport with
+    // the trigger scrolled low — ~200px of space below, card taller than
+    // that. The card must end up fully inside the window (flipped above OR
+    // capped to the space with internal scroll) — the max-height cap makes
+    // clipping impossible even if the flip-side choice changes.
+    const routineFitFlow = await evaluate(`(async () => {
+      try {
+        const app = () => document.querySelector("ss-app");
+        const root = () => dom(dom(app()).querySelector("ss-view-scenes"));
+        const rows = [...root().querySelectorAll("ss-scene-row")];
+        const row = [...rows].reverse().find((r) => dom(r).querySelector("ss-routine-popover"));
+        if (!row) return { fail: "no scene row with a routine chip" };
+        row.scrollIntoView({ block: "end" });
+        await new Promise((r) => setTimeout(r, 100));
+        const chip = dom(dom(row).querySelector("ss-routine-popover"));
+        const trigger = chip ? chip.querySelector(".trigger") : null;
+        if (!trigger) return { fail: "no routine chip" };
+        trigger.click();
+        await new Promise((r) => setTimeout(r, 160));
+        const pop = chip.querySelector("[popover]");
+        const open = !!pop && pop.matches(":popover-open");
+        const rect = open ? pop.getBoundingClientRect() : null;
+        const within = !!rect && rect.height > 0 &&
+          rect.top >= 0 && rect.bottom <= window.innerHeight &&
+          rect.left >= 0 && rect.right <= window.innerWidth;
+        // Whatever the chosen side, the card must never be taller than the
+        // space it was given — that is what guarantees the buttons are
+        // reachable (internal scroll) instead of clipped.
+        const capped = !!rect && rect.height <= window.innerHeight - 16;
+        if (pop && pop.hidePopover) pop.hidePopover();
+        return { open, within, capped, height: rect ? Math.round(rect.height) : null };
+      } catch (err) { return { fail: String(err && err.message) }; }
+    })()`);
+    check(
+      "routines: a popover opened from a low row on a tall viewport never clips past the window",
+      !!routineFitFlow && routineFitFlow.open === true && routineFitFlow.within === true && routineFitFlow.capped === true,
+      JSON.stringify(routineFitFlow)
+    );
 
       const advancedFlow = await evaluate(`(async () => {
   try {

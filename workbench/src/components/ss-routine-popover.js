@@ -418,17 +418,24 @@ export class SsRoutinePopover extends LitElement {
     popover.style.left = `${Math.max(margin, Math.min(r.left, window.innerWidth - width - margin))}px`;
     popover.style.right = "auto";
     // Vertical: prefer below the trigger; flip ABOVE when the card would
-    // clip past the window bottom and there is more room above. Runs at
-    // beforetoggle (clamped initial guess) and again on the open toggle,
-    // when the card's real height is measurable.
+    // clip past the window bottom and there is more room above. Some
+    // browsers fire `toggle` before the freshly-shown card has been laid
+    // out (offsetHeight 0), so the pre-layout pass assumes a realistic
+    // height and the post-open rAF pass corrects it with the real one.
+    // Whichever side is chosen, maxHeight is capped to THAT side's space so
+    // an over-tall card always scrolls internally — clipping is impossible
+    // by geometry, not by event timing.
     popover.style.top = "auto";
     popover.style.bottom = "auto";
-    const height = popover.offsetHeight;
-    const spaceBelow = window.innerHeight - r.bottom;
-    if (height && height + margin > spaceBelow && r.top > spaceBelow) {
+    const height = popover.offsetHeight || 360;
+    const spaceBelow = Math.max(0, window.innerHeight - r.bottom - 6);
+    const spaceAbove = Math.max(0, r.top - 12);
+    if (height > spaceBelow && spaceAbove > spaceBelow) {
       popover.style.bottom = `${Math.max(margin, window.innerHeight - r.top + 6)}px`;
+      popover.style.maxHeight = `${Math.max(120, spaceAbove)}px`;
     } else {
       popover.style.top = `${r.bottom + 6}px`;
+      popover.style.maxHeight = `${Math.max(120, spaceBelow)}px`;
     }
   }
 
@@ -446,9 +453,14 @@ export class SsRoutinePopover extends LitElement {
   }
 
   #onToggle(e) {
-    // After the popover is actually rendered open, reposition with real
-    // measurements (the beforetoggle pass has no reliable card height).
-    if (e.newState === "open") this.#position(e.target);
+    // After the popover is actually open, reposition with real measurements
+    // inside a rAF — layout is guaranteed complete there, while the toggle
+    // event itself can precede the first layout of the shown card.
+    if (e.newState !== "open") return;
+    const popover = e.target;
+    requestAnimationFrame(() => {
+      if (popover.isConnected && popover.matches(":popover-open")) this.#position(popover);
+    });
   }
 
   #startCreate(e) {
