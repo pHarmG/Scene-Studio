@@ -1745,6 +1745,9 @@ async function main() {
       const sr = dom(row);
       const chip = sr.querySelector("ss-routine-popover");
       const chipGone = !chip || chip.getBoundingClientRect().width === 0;
+      // The parked chip must also leave the TAB ORDER (a clip box alone
+      // would leave an invisible focusable control for keyboard users).
+      const triggerParked = !chip || dom(chip).querySelector(".trigger")?.disabled === true;
       const overflowMenu = [...sr.querySelectorAll("ss-overflow-menu")].find((m) => dom(m).querySelector(".trigger")?.getAttribute("aria-label") === "More scene actions");
       if (!overflowMenu) return { fail: "no overflow menu on the mobile row", chipGone };
       overflowMenu.querySelector(".trigger")?.click();
@@ -1776,7 +1779,7 @@ async function main() {
       const swatchW = sr.querySelector("ss-swatch-band")?.getBoundingClientRect().width || 0;
       const rowRect = row.getBoundingClientRect();
       const noOverflow = rowRect.right <= window.innerWidth + 1;
-      return { chipGone, hasSchedules, within, cardOpen, cardWithin, nameW: Math.round(nameW), swatchW: Math.round(swatchW), noOverflow };
+      return { chipGone, triggerParked, hasSchedules, within, cardOpen, cardWithin, nameW: Math.round(nameW), swatchW: Math.round(swatchW), noOverflow };
     })()`);
     await send("Emulation.clearDeviceMetricsOverride");
     await sleep(120);
@@ -1792,7 +1795,7 @@ async function main() {
     );
     check(
       "routines (mobile, 390px): the routine chip leaves the row and Schedules live in the context menu",
-      !!mobileRoutineFlow && mobileRoutineFlow.chipGone === true && mobileRoutineFlow.hasSchedules === true && mobileRoutineFlow.within === true,
+      !!mobileRoutineFlow && mobileRoutineFlow.chipGone === true && mobileRoutineFlow.triggerParked === true && mobileRoutineFlow.hasSchedules === true && mobileRoutineFlow.within === true,
       JSON.stringify(mobileRoutineFlow)
     );
     check(

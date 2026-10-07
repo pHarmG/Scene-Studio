@@ -782,6 +782,7 @@ export class SsSceneRow extends LitElement {
                 .routinesAvailable=${this.routinesAvailable}
                 .routinesReason=${this.routinesReason}
                 .allowedCommands=${this.allowedCommands}
+                .triggerDisabled=${this._narrow}
               ></ss-routine-popover>`
             : ""}
           ${runtimeTag

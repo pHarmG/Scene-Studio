@@ -53,6 +53,11 @@ export class SsRoutinePopover extends LitElement {
     routinesAvailable: { type: Boolean },
     routinesReason: { type: String },
     allowedCommands: { type: Array },
+    // Narrow rows park this element in a 0x0 clipped box (the schedule card
+    // must stay rendered) and open it from the row context menu instead —
+    // the invisible trigger must then also leave the tab order, which a
+    // clip box alone does not do. A disabled button does.
+    triggerDisabled: { type: Boolean },
   };
 
   static styles = css`
@@ -376,6 +381,7 @@ export class SsRoutinePopover extends LitElement {
     this.routinesAvailable = true;
     this.routinesReason = null;
     this.allowedCommands = null;
+    this.triggerDisabled = false;
     this._id = `ss-rp-${++seq}`;
     this._editor = null; // null | {mode:"create"} | {mode:"edit", routine}
     this._form = null; // {time, weekdays: null|[...], behavior}
@@ -746,7 +752,9 @@ export class SsRoutinePopover extends LitElement {
     const loaded = sum !== null;
     // Viewing routines is read-only: the chip stays available regardless of
     // write permissions — each editor control gates its own command.
-    const disabled = !loaded || !this.routinesAvailable;
+    // triggerDisabled (narrow rows) additionally parks the trigger out of
+    // the tab order while the card remains rendered for the context menu.
+    const disabled = !loaded || !this.routinesAvailable || this.triggerDisabled;
     const chipTitle = !loaded
       ? "Schedules loading…"
       : !this.routinesAvailable
