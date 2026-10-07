@@ -110,6 +110,10 @@ export class SsRoutinePopover extends LitElement {
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
       width: 264px;
       max-width: calc(100vw - 16px);
+      /* Long routine lists (or a low row near the viewport edge) must scroll
+         inside the card, never clip past the window bottom. */
+      max-height: calc(100vh - 24px);
+      overflow-y: auto;
       box-sizing: border-box;
     }
     [popover]:popover-open {
@@ -407,10 +411,25 @@ export class SsRoutinePopover extends LitElement {
     const trigger = this.renderRoot.querySelector(".trigger");
     if (!trigger) return;
     const r = trigger.getBoundingClientRect();
+    const margin = 8;
     popover.style.position = "fixed";
-    popover.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 272))}px`;
-    popover.style.top = `${r.bottom + 6}px`;
+    // Horizontal: clamp inside the viewport.
+    const width = popover.offsetWidth || 264;
+    popover.style.left = `${Math.max(margin, Math.min(r.left, window.innerWidth - width - margin))}px`;
     popover.style.right = "auto";
+    // Vertical: prefer below the trigger; flip ABOVE when the card would
+    // clip past the window bottom and there is more room above. Runs at
+    // beforetoggle (clamped initial guess) and again on the open toggle,
+    // when the card's real height is measurable.
+    popover.style.top = "auto";
+    popover.style.bottom = "auto";
+    const height = popover.offsetHeight;
+    const spaceBelow = window.innerHeight - r.bottom;
+    if (height && height + margin > spaceBelow && r.top > spaceBelow) {
+      popover.style.bottom = `${Math.max(margin, window.innerHeight - r.top + 6)}px`;
+    } else {
+      popover.style.top = `${r.bottom + 6}px`;
+    }
   }
 
   #onBeforeToggle(e) {
@@ -424,6 +443,12 @@ export class SsRoutinePopover extends LitElement {
       this._confirmDelete = null;
       this.requestUpdate();
     }
+  }
+
+  #onToggle(e) {
+    // After the popover is actually rendered open, reposition with real
+    // measurements (the beforetoggle pass has no reliable card height).
+    if (e.newState === "open") this.#position(e.target);
   }
 
   #startCreate(e) {
@@ -719,6 +744,7 @@ export class SsRoutinePopover extends LitElement {
         role="dialog"
         aria-label="Scene schedules"
         @beforetoggle=${this.#onBeforeToggle}
+        @toggle=${this.#onToggle}
         @click=${(e) => e.stopPropagation()}
       >
         ${this.#renderPopover()}

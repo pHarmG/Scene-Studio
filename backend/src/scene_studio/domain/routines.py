@@ -93,12 +93,14 @@ CLASSIFICATION_ADVANCED = "recognized_advanced"
 _WEEKDAY_SET = frozenset(WEEKDAYS)
 
 # Automation-level keys a native routine may carry. Everything else is
-# structural complexity this grammar does not model -> advanced.
+# structural complexity this grammar does not model -> advanced. The plural
+# list aliases belong to HA's modernized storage era (>= 2024.8); the
+# singular keys stay canonical and carrying both at once is ambiguous.
 _NATIVE_TOP_LEVEL_KEYS = frozenset({
     "id", "alias", "description", "trigger", "condition", "action",
+    "triggers", "conditions", "actions",
     "mode", "initial_state", "icon",
 })
-_NATIVE_TRIGGER_KEYS = frozenset({"platform", "at", "id"})
 _NATIVE_CONDITION_KEYS = frozenset({"condition", "weekday"})
 _NATIVE_MODES = frozenset({"single", "restart", "queued", "parallel"})
 
@@ -317,16 +319,48 @@ def _loose_bridge_reference(node, depth: int = 0) -> tuple[str, str] | None:
 
 def find_bridge_reference(config: dict) -> tuple[str, str] | None:
     """``(behavior, scene_id)`` when the automation references the Scene
-    Studio bridge anywhere in its action tree, else ``None``."""
-    actions = config.get("action")
-    if not isinstance(actions, list):
-        # A bare dict action (valid HA shorthand) still gets scanned loosely.
-        return _loose_bridge_reference(config.get("action"))
-    return _loose_bridge_reference(actions)
+    Studio bridge anywhere in its config, else ``None``. The scan is
+    whole-config (not just the ``action`` list) so both storage eras —
+    singular and plural list keys — are recognized."""
+    return _loose_bridge_reference(config)
 
 
 # ---------------------------------------------------------------------------
 # classification
+# ---------------------------------------------------------------------------
+# config-shape normalization (HA storage eras)
+# ---------------------------------------------------------------------------
+
+# HA 2024.8 modernized automation config storage: the trigger TYPE key was
+# renamed ``platform`` -> ``trigger``, and newer builds also accept the
+# plural list keys ``triggers``/``conditions``/``actions``. Scene Studio
+# still GENERATES the legacy shape (universally readable), but the
+# classifier must recognize BOTH eras — otherwise HA's own normalized
+# read-back of our write fails verification. Scene-Studio-meaningful
+# strictness (exactly one time trigger, one bridge action) is unchanged.
+_NATIVE_TRIGGER_KEYS = frozenset({"platform", "trigger", "at", "id"})
+_PLURAL_LIST_KEYS = {"trigger": "triggers", "condition": "conditions", "action": "actions"}
+
+
+def _resolve_config_lists(config: dict, reasons: list[str]) -> tuple[object, object, object]:
+    """Resolve the trigger/condition/action lists across storage eras.
+
+    Accepts the singular keys (legacy and still canonical) or the plural
+    aliases (newer HA); carrying BOTH forms at once is ambiguous -> advanced
+    (reason recorded, ``None`` returned for that list).
+    """
+    resolved = []
+    for singular, plural in _PLURAL_LIST_KEYS.items():
+        has_singular = singular in config
+        has_plural = plural in config
+        if has_singular and has_plural:
+            reasons.append(f"automation carries both {singular!r} and {plural!r}")
+            resolved.append(None)
+        else:
+            resolved.append(config.get(plural) if has_plural else config.get(singular))
+    return tuple(resolved)
+
+
 # ---------------------------------------------------------------------------
 
 def _classify_trigger(trigger, reasons: list[str]) -> str | None:
@@ -339,8 +373,11 @@ def _classify_trigger(trigger, reasons: list[str]) -> str | None:
     if not isinstance(first, dict):
         reasons.append("trigger is not a mapping")
         return None
-    if first.get("platform") != "time":
-        reasons.append(f"unsupported trigger platform {first.get('platform')!r}")
+    type_value = first.get("platform")
+    if type_value is None:
+        type_value = first.get("trigger")  # HA >= 2024.8 modernized key
+    if type_value != "time":
+        reasons.append(f"unsupported trigger type {type_value!r}")
         return None
     unsupported = sorted(set(first) - _NATIVE_TRIGGER_KEYS)
     if unsupported:
@@ -415,8 +452,9 @@ def classify_automation(
     enabled = entity_state != "off"
 
     reasons: list[str] = []
-    time_value = _classify_trigger(config.get("trigger"), reasons)
-    weekdays = _classify_conditions(config.get("condition"), reasons)
+    trigger_list, condition_list, action_list = _resolve_config_lists(config, reasons)
+    time_value = _classify_trigger(trigger_list, reasons)
+    weekdays = _classify_conditions(condition_list, reasons)
 
     unsupported_top = sorted(set(config) - _NATIVE_TOP_LEVEL_KEYS)
     if unsupported_top:
@@ -428,7 +466,7 @@ def classify_automation(
     if initial_state is not None and not isinstance(initial_state, bool):
         reasons.append("initial_state must be true/false")
 
-    actions = config.get("action")
+    actions = action_list
     exact_behavior = exact_scene_id = None
     if isinstance(actions, list) and len(actions) == 1:
         extracted = _extract_bridge_event(actions[0])

@@ -472,7 +472,13 @@ edits round-trip; unsupported structural edits move the routine to
   not a routine, ignored). Recognition is STRUCTURAL (it matches the
   canonical `scene_studio_ui_command` bridge event shape), never
   provenance-based; the versioned description marker
-  (`Scene Studio routine (schema N)`) is informative only.
+  (`Scene Studio routine (schema N)`) is informative only. BOTH HA config
+  storage eras are recognized — the legacy `platform:` trigger key with
+  singular `trigger/condition/action` lists, and the HA >= 2024.8
+  modernized shape (`trigger:` type key, plural `triggers/conditions/
+  actions` aliases; carrying both forms at once is advanced). Scene Studio
+  still GENERATES the legacy shape (universally readable); HA normalizes
+  on save and the read-back classifies native.
 - **Supported grammar**: exactly one `time` trigger (literal whole-minute
   `at`; `sun.*`, templates, multiple triggers → advanced), no conditions or
   one `time` condition with an optional weekday selection (mon..sun;

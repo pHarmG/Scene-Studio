@@ -154,6 +154,28 @@ def make_service(gateway, *, scenes=None, ttl=30.0, monotonic=None):
     return service, lookup
 
 
+class ModernHaAutomationGateway(FakeHaAutomationGateway):
+    """Fake gateway that mimics a modern HA host: config validation
+    normalizes saved automations to the 2024.8+ storage shape (trigger TYPE
+    key `trigger:`, plural list keys) exactly as the real REST config
+    endpoint returns them."""
+
+    @staticmethod
+    def _modernize(config: dict) -> dict:
+        modern = dict(config)
+        if "trigger" in modern:
+            triggers = modern.pop("trigger")
+            modern["triggers"] = [
+                {("trigger" if key == "platform" else key): value for key, value in item.items()}
+                if isinstance(item, dict) else item
+                for item in triggers
+            ]
+        return modern
+
+    def save_automation_config(self, automation_id: str, config: dict) -> None:
+        super().save_automation_config(automation_id, self._modernize(config))
+
+
 # ---------------------------------------------------------------------------
 # reads / projection
 # ---------------------------------------------------------------------------
@@ -378,6 +400,56 @@ def test_update_preserves_ha_level_settings():
     assert stored["initial_state"] is True
     assert stored["icon"] == "mdi:weather-night"
     assert stored["trigger"][0]["at"] == "21:00:00"  # the edit itself applied
+
+
+def test_create_and_update_round_trip_on_modern_ha_storage():
+    """Regression (live host, HA >= 2024.8): HA normalizes the saved config
+    to the modernized storage shape; verify-after-write must recognize it,
+    not reject and roll back the create."""
+    gateway = ModernHaAutomationGateway()
+    service, lookup = make_service(gateway)
+    data = service.create(
+        scene_id="evening_glow", behavior="apply", time_hhmm="19:30",
+        weekdays=["mon", "tue", "wed", "thu", "fri"], scene_lookup=lookup,
+    )
+    automation_id = data["routine"]["automation_id"]
+    stored = gateway.configs[automation_id]
+    assert "triggers" in stored and stored["triggers"][0]["trigger"] == "time"  # normalized by the host
+    assert data["routine"]["classification"] == "native_routine"
+    assert data["routine"]["schedule"]["time"] == "19:30"
+    assert data["routine"]["schedule"]["weekdays"] == ["mon", "tue", "wed", "thu", "fri"]
+
+    updated = service.update(
+        automation_id=automation_id, source_digest=data["routine"]["source_digest"],
+        time_hhmm="20:45", weekdays=None, scene_lookup=lookup,
+    )
+    assert updated["routine"]["schedule"]["time"] == "20:45"
+    assert updated["routine"]["schedule"]["weekdays"] is None
+    assert updated["routine"]["classification"] == "native_routine"
+
+
+def test_catalog_projects_modernized_storage_shape():
+    gateway = FakeHaAutomationGateway(configs={
+        "ssr_modern": {
+            "id": "ssr_modern",
+            "alias": "Scene Studio · Twilight · Daily 7:30 PM",
+            "description": "Scene Studio routine (schema 1) · scene_id=twilight · behavior=apply.",
+            "mode": "single",
+            "triggers": [{"trigger": "time", "at": "19:30:00"}],
+            "actions": [{
+                "event": "scene_studio_ui_command",
+                "event_data": {"command": "scene.apply", "scene_id": "twilight"},
+            }],
+        },
+    })
+    service, _ = make_service(gateway)
+    catalog = service.catalog()
+    assert catalog["available"] is True
+    assert len(catalog["routines"]) == 1
+    routine = catalog["routines"][0]
+    assert routine["classification"] == "native_routine"
+    assert routine["scene_id"] == "twilight"
+    assert routine["schedule"] == {"time": "19:30", "weekdays": None}
 
 
 def test_update_round_trips_supported_fields():

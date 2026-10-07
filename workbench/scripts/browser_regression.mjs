@@ -1355,8 +1355,10 @@ async function main() {
       const openState = twilightPop ? twilightPop.matches(":popover-open") : false;
       const popText = twilightPop ? twilightPop.textContent.replace(/\\s+/g, " ").trim() : "";
       const selectedAfterOpen = !!(store.state.selection && store.state.selection.type === "scene");
-      const inViewport = openState && twilightPop.getBoundingClientRect().width > 0 &&
-        twilightPop.getBoundingClientRect().right <= window.innerWidth;
+      const tpRect = openState ? twilightPop.getBoundingClientRect() : null;
+      const inViewport = !!tpRect && tpRect.width > 0 &&
+        tpRect.right <= window.innerWidth && tpRect.left >= 0 &&
+        tpRect.top >= 0 && tpRect.bottom <= window.innerHeight;
 
       // Edit the one native routine: editor opens from the list, time change
       // round-trips through the backend command and lands back in the chip.
@@ -1426,6 +1428,44 @@ async function main() {
       "routines: the row chip reflects the edited schedule",
       !!routineFlow && /8:45 PM/.test(routineFlow.textAfter || "") && routineFlow.editorClosed === true,
       JSON.stringify(routineFlow)
+    );
+    // Update UX pass sibling (viewport fit): a popover opened from a row
+    // near the window bottom must flip ABOVE the trigger and stay fully
+    // inside the viewport — never clip past the bottom edge. A short
+    // viewport makes the not-enough-space-below condition deterministic.
+    await send("Emulation.setDeviceMetricsOverride", { width: 900, height: 480, deviceScaleFactor: 1, mobile: false });
+    await sleep(150);
+    const routineFlipFlow = await evaluate(`(async () => {
+      try {
+        const app = () => document.querySelector("ss-app");
+        const root = () => dom(dom(app()).querySelector("ss-view-scenes"));
+        const rows = [...root().querySelectorAll("ss-scene-row")];
+        // Archived rows carry no chip by design; flip-test the last row that has one.
+        const row = [...rows].reverse().find((r) => dom(r).querySelector("ss-routine-popover"));
+        if (!row) return { fail: "no scene row with a routine chip" };
+        row.scrollIntoView({ block: "end" });
+        await new Promise((r) => setTimeout(r, 100));
+        const chip = dom(row.querySelector("ss-routine-popover") || dom(row).querySelector("ss-routine-popover"));
+        const trigger = chip ? chip.querySelector(".trigger") : null;
+        if (!trigger) return { fail: "no routine chip on the last row" };
+        trigger.click();
+        await new Promise((r) => setTimeout(r, 120));
+        const pop = chip.querySelector("[popover]");
+        const open = !!pop && pop.matches(":popover-open");
+        const rect = open ? pop.getBoundingClientRect() : null;
+        const within = !!rect && rect.top >= 0 && rect.bottom <= window.innerHeight &&
+          rect.left >= 0 && rect.right <= window.innerWidth;
+        const flipped = !!rect && rect.bottom < trigger.getBoundingClientRect().top;
+        if (pop && pop.hidePopover) pop.hidePopover();
+        return { open, within, flipped };
+      } catch (err) { return { fail: String(err && err.message) }; }
+    })()`);
+    await send("Emulation.clearDeviceMetricsOverride");
+    await sleep(120);
+    check(
+      "routines: a popover on a low row flips above the trigger and stays fully within the viewport",
+      !!routineFlipFlow && routineFlipFlow.open === true && routineFlipFlow.within === true && routineFlipFlow.flipped === true,
+      JSON.stringify(routineFlipFlow)
     );
 
       const advancedFlow = await evaluate(`(async () => {

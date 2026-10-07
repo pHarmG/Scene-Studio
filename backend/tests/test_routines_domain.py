@@ -114,6 +114,41 @@ def test_time_trigger_without_seconds_and_with_trigger_id_parses():
     assert projection.schedule.time == "07:05"
 
 
+def test_modernized_trigger_type_key_parses():
+    """HA >= 2024.8 normalizes the trigger TYPE key to `trigger` on save —
+    the read-back of our own write must classify native, not advanced."""
+    config = native_config()
+    config["trigger"] = [{"trigger": "time", "at": "19:30:00"}]
+    projection = classify(config)
+    assert projection.classification == CLASSIFICATION_NATIVE
+    assert projection.schedule == RoutineSchedule(time="19:30", weekdays=None)
+
+
+def test_modernized_plural_list_keys_parse():
+    """Newer HA storage can return the plural list aliases."""
+    config = {
+        "id": "ssr_0f1e2d3c4b5a",
+        "alias": "Scene Studio · Evening Glow · Weekdays 7:00 PM",
+        "description": build_provenance_description(scene_id="evening_glow", behavior="apply"),
+        "mode": "single",
+        "triggers": [{"trigger": "time", "at": "19:30:00"}],
+        "conditions": [{"condition": "time", "weekday": ["mon", "tue", "wed", "thu", "fri"]}],
+        "actions": [bridge_action()],
+    }
+    projection = classify(config)
+    assert projection.classification == CLASSIFICATION_NATIVE
+    assert projection.schedule == RoutineSchedule(time="19:30", weekdays=("mon", "tue", "wed", "thu", "fri"))
+    assert projection.behavior == "apply"
+
+
+def test_both_singular_and_plural_lists_are_advanced():
+    config = native_config()
+    config["triggers"] = config["trigger"]
+    projection = classify(config)
+    assert projection.classification == CLASSIFICATION_ADVANCED
+    assert any("both 'trigger' and 'triggers'" in reason for reason in projection.unsupported_reasons)
+
+
 def test_apply_vs_play_classification():
     apply_projection = classify(native_config(command="scene.apply"))
     play_projection = classify(native_config(command="playback.start", scene_id="aurora_flow"))
