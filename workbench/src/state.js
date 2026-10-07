@@ -185,6 +185,50 @@ export function targetReadiness(fixtures, targetId, { isGroup = false } = {}) {
 }
 
 /**
+ * Display view model for the engine's APPLIED static scene (status
+ * `current`): the scene whose look the fixtures are holding right now.
+ * Resolves the catalog display name, the applied target ids, the resolved
+ * fixture count, and the scene's palette identity for the live cockpit's
+ * static row. Returns null when nothing is applied.
+ *
+ * The engine ships `{scene_id, target_id}`; the mock enriches it with
+ * `name`/`target_ids` — both shapes are handled, with the catalog as the
+ * display source of truth (a rename between apply and read still shows the
+ * current name).
+ *
+ * @param {{scene_id: string, target_id?: string, target_ids?: string[], name?: string}|null} current
+ * @param {{scenes?: object[], fixtures?: object[], targets?: object[]}} catalogs
+ * @param {Record<string, string[]>} [palettes] scene_id -> palette hex list
+ *   (sceneLookSwatches), precomputed by the caller so the canonicalization
+ *   runs once per render for the whole catalog
+ * @returns {{scene_id: string, name: string, target_ids: string[], targets: string, fixtures: number, palette: string[]} | null}
+ */
+export function currentSceneView(current, { scenes = [], fixtures = [], targets = [] } = {}, palettes = null) {
+  if (!current || !current.scene_id) return null;
+  const scene = scenes.find((sc) => sc.id === current.scene_id) || null;
+  const targetIds = Array.isArray(current.target_ids) && current.target_ids.length
+    ? current.target_ids
+    : current.target_id
+      ? [current.target_id]
+      : (scene && scene.target_ids) || [];
+  const declaredTargetIds = targets.map((t) => t.id);
+  const seen = new Set();
+  for (const targetId of targetIds) {
+    for (const fixture of resolveTargetFixtures(fixtures, targetId, { declaredTargetIds })) {
+      seen.add(fixture.id);
+    }
+  }
+  return {
+    scene_id: current.scene_id,
+    name: (scene && scene.name) || current.name || current.scene_id,
+    target_ids: targetIds,
+    targets: targetIds.join(" · ") || "all targets",
+    fixtures: seen.size,
+    palette: (palettes && palettes[current.scene_id]) || [],
+  };
+}
+
+/**
  * Describe canonical scene fields the Builder does not fully edit so the UI
  * can warn "preserved unchanged" instead of silently hiding them. Overrides
  * and defaults ARE editable now (Builder-expansion §2/§3) — what stays

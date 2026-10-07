@@ -20,7 +20,7 @@ import "../components/ss-playback-panel.js";
 import { iconChevronRight, iconRefresh } from "../components/icons.js";
 import { sceneLookSwatches } from "../scene_look.js";
 import { normalizePlayback, sessionsForScene, summarizeSession } from "../playback.js";
-import { playbackActionEnvelope, resolveTargetFixtures } from "../state.js";
+import { playbackActionEnvelope, resolveTargetFixtures, currentSceneView } from "../state.js";
 
 export class SsViewScenes extends SsLightElement {
   static properties = { store: { attribute: false } };
@@ -331,6 +331,16 @@ export class SsViewScenes extends SsLightElement {
     const archivedScenes = s.scenes.scenes.filter(isArchived);
     const sel = s.selection;
     const scenePalettes = Object.fromEntries(s.scenes.scenes.map((sc) => [sc.id, sceneLookSwatches(sc)]));
+    // Applied static scene (status `current`) for the live panel's idle row.
+    const currentRow = currentSceneView(
+      current,
+      {
+        scenes: s.scenes.scenes,
+        fixtures: (s.fixtures && s.fixtures.fixtures) || [],
+        targets: (s.fixtures && s.fixtures.targets) || [],
+      },
+      scenePalettes
+    );
     const fixtureNames = Object.fromEntries(
       (s.fixtures ? s.fixtures.fixtures : []).map((f) => [f.id, f.name])
     );
@@ -352,6 +362,7 @@ export class SsViewScenes extends SsLightElement {
         .allowedCommands=${st && st.runtime ? st.runtime.allowed_commands : null}
         .fixtureNames=${fixtureNames}
         .scenePalettes=${scenePalettes}
+        .current=${currentRow}
         .highlightSessionId=${highlightSessionId}
         .highlightSceneId=${highlightSceneId}
         .stoppedHistory=${true}

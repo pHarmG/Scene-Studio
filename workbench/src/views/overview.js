@@ -18,8 +18,8 @@ import "../components/ss-panel.js";
 import "../components/ss-playback-panel.js";
 import { iconAlertCircle, iconAlertTriangle, iconChevronRight } from "../components/icons.js";
 import { statusTone, buildOverviewExceptions } from "../inspector.js";
-import { normalizePlayback, liveSessions } from "../playback.js";
-import { playbackActionEnvelope } from "../state.js";
+import { normalizePlayback } from "../playback.js";
+import { playbackActionEnvelope, currentSceneView } from "../state.js";
 import { sceneLookSwatches } from "../scene_look.js";
 
 export class SsViewOverview extends SsLightElement {
@@ -78,11 +78,6 @@ export class SsViewOverview extends SsLightElement {
     .fleet-val.ok, .ok { color: var(--ss-ok); }
     .fleet-val.err, .err { color: var(--ss-err); }
     .fleet-val.warn, .warn { color: var(--ss-warn); }
-    .fleet-current {
-      font-size: var(--ss-size-12);
-      color: var(--ss-text-faint);
-      padding-top: 8px;
-    }
     .exceptions {
       display: flex;
       flex-direction: column;
@@ -198,21 +193,23 @@ export class SsViewOverview extends SsLightElement {
     // R5A collection shape (R5C playback.js) — never read st.playback
     // directly, an empty {sessions:[],...} object is truthy.
     const playback = normalizePlayback(st.playback);
-    const liveCount = liveSessions(playback).length;
     const current = st.current;
     const links = st.provider_links || [];
     const providerCounts = st.providers || {};
     const scenes = s.scenes ? s.scenes.scenes : [];
-    const sceneName = (id) => {
-      const scene = scenes.find((sc) => sc.id === id);
-      return scene ? scene.name : id;
-    };
     const scenePalettes = Object.fromEntries(scenes.map((sc) => [sc.id, sceneLookSwatches(sc)]));
-    const currentTargets = current
-      ? current.target_ids && current.target_ids.length
-        ? current.target_ids.join(", ")
-        : current.target_id || "all targets"
-      : "";
+    // Applied static scene for the playback panel's idle row — replaces the
+    // former bespoke "Current:" line in the Fleet panel (same visibility
+    // rule: it yields while any live session owns the fixtures).
+    const currentRow = currentSceneView(
+      current,
+      {
+        scenes,
+        fixtures: (s.fixtures && s.fixtures.fixtures) || [],
+        targets: (s.fixtures && s.fixtures.targets) || [],
+      },
+      scenePalettes
+    );
     // Shared with the header status pill (app.js, Stage 2) — see
     // inspector.js's buildOverviewExceptions for the one source of truth.
     const exceptions = buildOverviewExceptions(s);
@@ -235,6 +232,7 @@ export class SsViewOverview extends SsLightElement {
           .allowedCommands=${st.runtime ? st.runtime.allowed_commands : null}
           .fixtureNames=${fixtureNames}
           .scenePalettes=${scenePalettes}
+          .current=${currentRow}
           .stoppedHistory=${true}
           @playback-action=${this.#onPlaybackAction}
         ></ss-playback-panel>
@@ -302,9 +300,6 @@ export class SsViewOverview extends SsLightElement {
                 ${fx.disabled ? html`· <span class="muted">${fx.disabled} disabled</span>` : ""}
               </span>
             </div>
-            ${current && !liveCount
-              ? html`<div class="fleet-current">Current: <b>${sceneName(current.scene_id)}</b> → ${currentTargets}</div>`
-              : ""}
           </ss-panel>
         </div>
       </div>
