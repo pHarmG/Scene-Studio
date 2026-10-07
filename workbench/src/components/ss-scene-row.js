@@ -40,6 +40,7 @@ import {
   iconAlertTriangle,
   iconApply,
   iconArchive,
+  iconClock,
   iconDryRun,
   iconDuplicate,
   iconPencil,
@@ -296,7 +297,7 @@ export class SsSceneRow extends LitElement {
        a soft green ring instead — same semantics, near-zero width. */
     @container ss-scene-row (max-width: 700px) {
       .row {
-        grid-template-columns: minmax(0, 1.15fr) minmax(4.75rem, 1.25fr) var(--ss-actions-col);
+        grid-template-columns: minmax(0, 1.25fr) minmax(4.75rem, 1.15fr) var(--ss-actions-col);
       }
       ss-scope-control,
       .ready {
@@ -326,11 +327,20 @@ export class SsSceneRow extends LitElement {
       .active-tag {
         display: none;
       }
-      /* The routine chip collapses to its clock glyph (routines pass):
-         container queries cannot reach the nested shadow tree, so the row
-         sets a custom property the popover's own styles consume. */
+      /* Narrow rows: the routine chip leaves the name cell — schedules open
+         from the row's context menu ("Schedules…"). The chip element must
+         STAY RENDERED (the schedule card lives in its tree and a display:none
+         ancestor would zero-size even the top-layer card), so it is taken out
+         of flow in a 0x0 clipped box instead: invisible, no row space, and
+         the popover escapes the clip into the top layer when opened. */
       ss-routine-popover {
-        --ss-routine-chip-text-display: none;
+        position: absolute;
+        width: 0;
+        height: 0;
+        overflow: hidden;
+      }
+      .row {
+        --ss-actions-col: 88px;
       }
       /* Drawn by ::after (the row's ::before carries the palette tint),
          inset and rounded: a square full-bleed outline gets its corners
@@ -358,6 +368,34 @@ export class SsSceneRow extends LitElement {
     this.routinesAvailable = true;
     this.routinesReason = null;
     this._editing = false;
+    // Narrow-row mode (mobile scene-row pass): mirrors the row's own
+    // container-query breakpoint (700px). Below it the row is restructured —
+    // the routine chip leaves the name cell for the row's context menu, and
+    // Apply/Play condense into ONE menu control — so Name / Swatch /
+    // Controls keep the space. ResizeObserver (not matchMedia) because the
+    // breakpoint is the ROW's container width, not the viewport's.
+    this._narrow = false;
+    this._rowResizeObserver = null;
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    this._rowResizeObserver = new ResizeObserver((entries) => {
+      const narrow = entries[0].contentRect.width <= 700;
+      if (narrow !== this._narrow) {
+        this._narrow = narrow;
+        this.requestUpdate();
+      }
+    });
+    this._rowResizeObserver.observe(this);
+  }
+
+  disconnectedCallback() {
+    if (this._rowResizeObserver) {
+      this._rowResizeObserver.disconnect();
+      this._rowResizeObserver = null;
+    }
+    super.disconnectedCallback();
   }
 
 
@@ -422,6 +460,15 @@ export class SsSceneRow extends LitElement {
     this.dispatchEvent(
       new CustomEvent("select-scene", { detail: { id: this.scene.id }, bubbles: true, composed: true })
     );
+  }
+
+  /** Narrow rows carry no routine chip; the context menu's "Schedules…"
+   *  item opens the same schedule card, anchored to this row (mobile
+   *  scene-row pass). */
+  #openRoutines(e) {
+    e.stopPropagation();
+    const chip = this.renderRoot.querySelector("ss-routine-popover");
+    if (chip) chip.open(this.getBoundingClientRect());
   }
 
   #startRename(e) {
@@ -529,6 +576,19 @@ export class SsSceneRow extends LitElement {
     const eligible = sum && sum.dynamicEligible;
     const canAnimate = !!(eligible && eligible.capable > 0);
     const items = [];
+    // Narrow rows carry no routine chip (mobile scene-row pass): schedules
+    // live in the row's context menu instead, opening the same card
+    // anchored to this row.
+    if (this._narrow) {
+      items.push({
+        key: "schedules",
+        icon: iconClock(16),
+        label: "Schedules…",
+        ariaLabel: "Schedules",
+        title: "Time schedules for this scene",
+        onClick: (e) => { this.#openRoutines(e); },
+      });
+    }
     // External light sync (hyperHDR) is holding fixtures: offer the one-shot
     // takeover apply here rather than as a second bolt icon next to the
     // primary Apply/Play button (indistinguishable at a glance — both used
@@ -664,12 +724,29 @@ export class SsSceneRow extends LitElement {
             <button @click=${this.#cancelRename}>✕</button>
           </span>
         `
-      : html`
-          <ss-action-menu dense .items=${this.#primaryItems()}></ss-action-menu>
-          ${this.archived
-            ? ""
-            : html`<ss-overflow-menu triggerLabel="More scene actions" .items=${this.#secondaryItems()}></ss-overflow-menu>`}
-        `;
+      : this._narrow
+        // Narrow rows (mobile scene-row pass): Apply/Play condense into ONE
+        // menu control (⚡-triggered, offers both) so the row keeps two
+        // compact controls total — actions + context — and Name / Swatch
+        // keep their room.
+        ? html`
+            ${this.archived
+              ? ""
+              : html`<ss-overflow-menu
+                  triggerLabel="Scene actions"
+                  .triggerIcon=${iconApply(17)}
+                  .items=${this.#primaryItems()}
+                ></ss-overflow-menu>`}
+            ${this.archived
+              ? ""
+              : html`<ss-overflow-menu triggerLabel="More scene actions" .items=${this.#secondaryItems()}></ss-overflow-menu>`}
+          `
+        : html`
+            <ss-action-menu dense .items=${this.#primaryItems()}></ss-action-menu>
+            ${this.archived
+              ? ""
+              : html`<ss-overflow-menu triggerLabel="More scene actions" .items=${this.#secondaryItems()}></ss-overflow-menu>`}
+          `;
 
     return html`
       <div
@@ -695,8 +772,9 @@ export class SsSceneRow extends LitElement {
           <!-- HA-native routine affordance (routines pass): a compact
                temporal chip in the row chrome — clock-only when unscheduled,
                the concise recurrence + time for one routine, "N routines"
-               for several. Anchored popover, top-layer (never clipped);
-               archived rows stay unschedulable. -->
+               for several. Anchored popover, top-layer (never clipped).
+               Archived rows stay unschedulable; NARROW rows drop the chip
+               entirely — schedules move into the row's context menu. -->
           ${!this.archived
             ? html`<ss-routine-popover
                 .scene=${s}

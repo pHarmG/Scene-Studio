@@ -110,10 +110,12 @@ export class SsRoutinePopover extends LitElement {
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
       width: 264px;
       max-width: calc(100vw - 16px);
-      /* Long routine lists (or a low row near the viewport edge) must scroll
-         inside the card, never clip past the window bottom. */
+      /* Long routine lists scroll inside the card (the positioner caps the
+         height to the chosen side's space). Horizontal overflow is never
+         meaningful here — wide children wrap instead of scrolling. */
       max-height: calc(100vh - 24px);
       overflow-y: auto;
+      overflow-x: hidden;
       box-sizing: border-box;
     }
     [popover]:popover-open {
@@ -275,7 +277,8 @@ export class SsRoutinePopover extends LitElement {
     }
     .time-row {
       display: flex;
-      gap: 6px;
+      flex-wrap: wrap;
+      gap: 4px 6px;
       align-items: center;
     }
     input[type="time"] {
@@ -364,15 +367,6 @@ export class SsRoutinePopover extends LitElement {
       border-color: var(--ss-accent);
       color: #fff;
     }
-    /* Compact rows: the chip collapses to the clock glyph alone. The row's
-       container query cannot restyle inside this shadow tree (container
-       queries do not cross shadow boundaries), so the row sets
-       --ss-routine-chip-text-display: none on this element — a custom
-       property, which DOES inherit across shadow roots (the same piercing
-       strategy as the --ss-* tokens). */
-    .trigger .text {
-      display: var(--ss-routine-chip-text-display, inline);
-    }
   `;
 
   constructor() {
@@ -386,6 +380,7 @@ export class SsRoutinePopover extends LitElement {
     this._editor = null; // null | {mode:"create"} | {mode:"edit", routine}
     this._form = null; // {time, weekdays: null|[...], behavior}
     this._confirmDelete = null; // automation_id armed for delete confirmation
+    this._anchorRect = null; // opener-provided DOMRect (row context-menu path)
   }
 
   #summary() {
@@ -407,47 +402,71 @@ export class SsRoutinePopover extends LitElement {
     );
   }
 
+  /**
+   * Open the schedule card anchored to `anchorRect` (a DOMRect from the
+   * opening control — the row, when opened from the row's context menu on
+   * narrow screens, where the chip itself is not rendered). Without an
+   * anchor the card positions from its own chip trigger as usual.
+   */
+  open(anchorRect = null) {
+    const popover = this.renderRoot.querySelector("[popover]");
+    if (!popover || popover.matches(":popover-open")) return;
+    this._anchorRect = anchorRect;
+    this.#position(popover);
+    popover.showPopover();
+  }
+
   #position(popover) {
-    const trigger = this.renderRoot.querySelector(".trigger");
-    if (!trigger) return;
-    const r = trigger.getBoundingClientRect();
+    const anchor = this._anchorRect
+      || this.renderRoot.querySelector(".trigger")?.getBoundingClientRect();
+    if (!anchor || (!anchor.width && !anchor.height)) {
+      // Anchor not rendered (e.g. hidden chip): pin to the viewport edge.
+      this.#pinBottom(popover);
+      return;
+    }
     const margin = 8;
     popover.style.position = "fixed";
     // Horizontal: clamp inside the viewport.
     const width = popover.offsetWidth || 264;
-    popover.style.left = `${Math.max(margin, Math.min(r.left, window.innerWidth - width - margin))}px`;
+    popover.style.left = `${Math.max(margin, Math.min(anchor.left, window.innerWidth - width - margin))}px`;
     popover.style.right = "auto";
-    // Vertical: prefer below the trigger; flip ABOVE when the card would
-    // clip past the window bottom and there is more room above. Some
+    // Vertical: prefer directly below the anchor; when the card would clip
+    // past the window bottom, PIN its bottom edge to the viewport bottom and
+    // grow upward from there — the page edge pushes the card up, and within
+    // desktop limits the whole card renders without any scrolling. Some
     // browsers fire `toggle` before the freshly-shown card has been laid
     // out (offsetHeight 0), so the pre-layout pass assumes a realistic
     // height and the post-open rAF pass corrects it with the real one.
-    // Whichever side is chosen, maxHeight is capped to THAT side's space so
-    // an over-tall card always scrolls internally — clipping is impossible
-    // by geometry, not by event timing.
     popover.style.top = "auto";
     popover.style.bottom = "auto";
     const height = popover.offsetHeight || 360;
-    const spaceBelow = Math.max(0, window.innerHeight - r.bottom - 6);
-    const spaceAbove = Math.max(0, r.top - 12);
-    if (height > spaceBelow && spaceAbove > spaceBelow) {
-      popover.style.bottom = `${Math.max(margin, window.innerHeight - r.top + 6)}px`;
-      popover.style.maxHeight = `${Math.max(120, spaceAbove)}px`;
+    const spaceBelow = Math.max(0, window.innerHeight - anchor.bottom - 6);
+    if (height > spaceBelow) {
+      this.#pinBottom(popover);
     } else {
-      popover.style.top = `${r.bottom + 6}px`;
+      popover.style.top = `${anchor.bottom + 6}px`;
       popover.style.maxHeight = `${Math.max(120, spaceBelow)}px`;
     }
+  }
+
+  #pinBottom(popover) {
+    // The card's bottom rides the viewport bottom; it grows upward from
+    // there. The height cap only engages on very short windows, where the
+    // card scrolls internally as the last resort.
+    popover.style.top = "auto";
+    popover.style.bottom = "8px";
+    popover.style.maxHeight = `${Math.max(120, window.innerHeight - 16)}px`;
   }
 
   #onBeforeToggle(e) {
     if (e.newState === "open") {
       this.#position(e.target);
     } else {
-      // Reset transient editor state when the popover light-dismisses, and
-      // re-render now so a reopen shows the list — not a stale editor whose
-      // target routine may have changed underneath it.
+      // Reset transient state when the popover light-dismisses — the stale
+      // editor, the armed delete confirm, and the one-shot menu anchor.
       this._editor = null;
       this._confirmDelete = null;
+      this._anchorRect = null;
       this.requestUpdate();
     }
   }

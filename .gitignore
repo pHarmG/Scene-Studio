@@ -28,3 +28,4 @@ home-assistant/scene-studio-card/review-artifacts/**
 # OS/editor noise
 .DS_Store
 Thumbs.db
+.playwright-mcp/

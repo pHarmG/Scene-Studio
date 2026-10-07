@@ -27,6 +27,10 @@
  *         ariaLabel?:string, onClick:(e:Event)=>void}[]} items
  * @prop {string} [triggerLabel] accessible name for the trigger (default
  *   "More actions")
+ * @prop {import("lit").TemplateResult} [triggerIcon] glyph for the trigger
+ *   button (default the "…" more icon) — lets a condensed control (e.g. the
+ *   scene row's narrow-width Apply/Play menu) keep its recognizable icon
+ *   while opening a menu.
  */
 import { LitElement, html, css } from "lit";
 import { iconMore } from "./icons.js";
@@ -37,6 +41,7 @@ export class SsOverflowMenu extends LitElement {
   static properties = {
     items: { attribute: false },
     triggerLabel: { type: String },
+    triggerIcon: { attribute: false },
   };
 
   static styles = css`
@@ -118,6 +123,7 @@ export class SsOverflowMenu extends LitElement {
     super();
     this.items = [];
     this.triggerLabel = "More actions";
+    this.triggerIcon = null; // default: the "…" more icon
     this._id = `ss-om-${++seq}`;
   }
 
@@ -167,7 +173,7 @@ export class SsOverflowMenu extends LitElement {
         aria-haspopup="menu"
         @click=${(e) => e.stopPropagation()}
       >
-        ${iconMore(17)}
+        ${this.triggerIcon || iconMore(17)}
       </button>
       <div
         id=${this._id}

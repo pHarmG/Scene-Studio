@@ -1455,16 +1455,22 @@ async function main() {
         const rect = open ? pop.getBoundingClientRect() : null;
         const within = !!rect && rect.top >= 0 && rect.bottom <= window.innerHeight &&
           rect.left >= 0 && rect.right <= window.innerWidth;
-        const flipped = !!rect && rect.bottom < trigger.getBoundingClientRect().top;
+        // Bottom-pin is required only when the card would not fit below the
+        // trigger (then the viewport edge pushes the card up); otherwise a
+        // fully-visible card below the trigger is equally correct.
+        const spaceBelow = window.innerHeight - trigger.getBoundingClientRect().bottom;
+        const shouldPin = open && spaceBelow < rect.height;
+        const bottomPinned = !!rect && Math.abs(rect.bottom - window.innerHeight) <= 12;
+        const pinOk = !shouldPin || bottomPinned;
         if (pop && pop.hidePopover) pop.hidePopover();
-        return { open, within, flipped };
+        return { open, within, pinOk };
       } catch (err) { return { fail: String(err && err.message) }; }
     })()`);
     await send("Emulation.clearDeviceMetricsOverride");
     await sleep(120);
     check(
-      "routines: a popover on a low row flips above the trigger and stays fully within the viewport",
-      !!routineFlipFlow && routineFlipFlow.open === true && routineFlipFlow.within === true && routineFlipFlow.flipped === true,
+      "routines: a popover on a low row pins to the viewport bottom and stays fully within the viewport",
+      !!routineFlipFlow && routineFlipFlow.open === true && routineFlipFlow.within === true && routineFlipFlow.pinOk === true,
       JSON.stringify(routineFlipFlow)
     );
     // Live-host regression (v0.2.2 report): the DEFAULT tall viewport with
@@ -1504,6 +1510,63 @@ async function main() {
       "routines: a popover opened from a low row on a tall viewport never clips past the window",
       !!routineFitFlow && routineFitFlow.open === true && routineFitFlow.within === true && routineFitFlow.capped === true,
       JSON.stringify(routineFitFlow)
+    );
+    // Desktop fit pass: within desktop limits the editor card must render
+    // FULLY — bottom-pinned to the viewport, growing upward — with NO
+    // scrollbars at all (the internal scroll is only the tiny-window last
+    // resort). The chip stays on the row and the context menu carries no
+    // Schedules duplicate on desktop.
+    const routineDesktopFlow = await evaluate(`(async () => {
+      try {
+        const app = () => document.querySelector("ss-app");
+        const root = () => dom(dom(app()).querySelector("ss-view-scenes"));
+        const row = [...root().querySelectorAll("ss-scene-row")].find((r) => r.scene && r.scene.id === "twilight");
+        if (!row) return { fail: "twilight row not found" };
+        const chip = dom(dom(row).querySelector("ss-routine-popover"));
+        const chipVisible = !!chip && chip.querySelector(".trigger")?.getBoundingClientRect().width > 0;
+        // scroll the row near the bottom so the card must bottom-pin
+        row.scrollIntoView({ block: "end" });
+        await new Promise((r) => setTimeout(r, 100));
+        const trigger = chip.querySelector(".trigger");
+        trigger.click();
+        await new Promise((r) => setTimeout(r, 120));
+        const pop = chip.querySelector("[popover]");
+        const open = !!pop && pop.matches(":popover-open");
+        const editBtn = open ? [...pop.querySelectorAll(".routine .controls .btn")].find((b) => b.textContent.trim() === "Edit") : null;
+        if (!editBtn) return { fail: "no Edit button", chipVisible };
+        editBtn.click();
+        await new Promise((r) => setTimeout(r, 120));
+        const pop2 = chip.querySelector("[popover]");
+        const noHScroll = pop2 ? pop2.scrollWidth <= pop2.clientWidth + 1 : false;
+        const noVScroll = pop2 ? pop2.scrollHeight <= pop2.clientHeight + 1 : false;
+        const rect = pop2 ? pop2.getBoundingClientRect() : null;
+        const within = !!rect && rect.top >= 0 && rect.bottom <= window.innerHeight && rect.left >= 0 && rect.right <= window.innerWidth;
+        // Pin is required only when the editor would not fit below the trigger.
+        const spaceBelow = window.innerHeight - trigger.getBoundingClientRect().bottom;
+        const shouldPin = rect ? spaceBelow < rect.height : false;
+        const bottomPinned = !!rect && Math.abs(rect.bottom - window.innerHeight) <= 12;
+        const pinOk = !shouldPin || bottomPinned;
+        if (pop2 && pop2.hidePopover) pop2.hidePopover();
+        // Context menu on desktop: no Schedules duplicate.
+        const overflow = [...dom(row).querySelectorAll("ss-overflow-menu")].find((m) => dom(m).querySelector(".trigger")?.getAttribute("aria-label") === "More scene actions");
+        let noSchedulesInMenu = null;
+        if (overflow) {
+          dom(overflow).querySelector(".trigger")?.click();
+          await new Promise((r) => setTimeout(r, 80));
+          const menu = dom(overflow).querySelector("[popover]");
+          noSchedulesInMenu = menu ? !menu.textContent.includes("Schedules…") : null;
+          if (menu && menu.hidePopover) menu.hidePopover();
+        }
+        return { chipVisible, open, noHScroll, noVScroll, within, pinOk, noSchedulesInMenu };
+      } catch (err) { return { fail: String(err && err.message) }; }
+    })()`);
+    check(
+      "routines (desktop): the editor card fits fully in view with no scrollbars, pinning only when space demands, chip stays, no menu duplicate",
+      !!routineDesktopFlow && routineDesktopFlow.chipVisible === true && routineDesktopFlow.open === true &&
+        routineDesktopFlow.noHScroll === true && routineDesktopFlow.noVScroll === true &&
+        routineDesktopFlow.within === true && routineDesktopFlow.pinOk === true &&
+        routineDesktopFlow.noSchedulesInMenu === true,
+      JSON.stringify(routineDesktopFlow)
     );
 
       const advancedFlow = await evaluate(`(async () => {
@@ -1661,23 +1724,59 @@ async function main() {
         readyVisible: visible(sr.querySelector(".ready")),
       };
     })()`);
-    // Routines pass (compact): the routine chip collapses to the clock
-    // glyph below the row's 700px container breakpoint (summary text stays
-    // in the DOM, hidden) and never pushes the row wider than its panel.
+    // Mobile scene-row pass (390px): the routine chip leaves the row
+    // entirely (schedules live in the row's context menu), Apply/Play
+    // condense into ONE ⚡ menu control, and Name / Swatch keep reasonable
+    // room. The row must never overflow horizontally.
     const mobileRoutineFlow = await evaluate(`(async () => {
       const app = () => document.querySelector("ss-app");
       const root = () => dom(dom(app()).querySelector("ss-view-scenes"));
-      const row = [...root().querySelectorAll("ss-scene-row")].find((r) => r.scene && r.scene.id === "twilight");
+      const row = await (async () => {
+        const t0 = Date.now();
+        while (Date.now() - t0 < 6000) {
+          const r = [...root().querySelectorAll("ss-scene-row")].find((x) => x.scene && x.scene.id === "twilight");
+          if (r) return r;
+          await new Promise((res) => setTimeout(res, 60));
+        }
+        return null;
+      })();
       if (!row) return { fail: "twilight row not found" };
-      const pop = dom(row).querySelector("ss-routine-popover");
-      if (!pop) return { fail: "no ss-routine-popover on the mobile row" };
-      const trigger = dom(pop).querySelector(".trigger");
-      if (!trigger) return { fail: "no routine chip trigger" };
-      const text = dom(pop).querySelector(".trigger .text");
-      const textHidden = !text || getComputedStyle(text).display === "none";
+      await new Promise((r) => setTimeout(r, 120)); // ResizeObserver tick
+      const sr = dom(row);
+      const chip = sr.querySelector("ss-routine-popover");
+      const chipGone = !chip || chip.getBoundingClientRect().width === 0;
+      const overflowMenu = [...sr.querySelectorAll("ss-overflow-menu")].find((m) => dom(m).querySelector(".trigger")?.getAttribute("aria-label") === "More scene actions");
+      if (!overflowMenu) return { fail: "no overflow menu on the mobile row", chipGone };
+      overflowMenu.querySelector(".trigger")?.click();
+      await new Promise((r) => setTimeout(r, 80));
+      const menu = dom(overflowMenu).querySelector("[popover]");
+      const menuText = menu ? menu.textContent.replace(/\\s+/g, " ").trim() : "";
+      const hasSchedules = /Schedules…/.test(menuText);
+      const within = menu ? (() => { const rc = menu.getBoundingClientRect(); return rc.left >= 0 && rc.right <= window.innerWidth && rc.top >= 0 && rc.bottom <= window.innerHeight; })() : false;
+      if (menu && menu.hidePopover) menu.hidePopover();
+      // Schedules from the context menu opens the anchored card, in view.
+      overflowMenu.querySelector(".trigger")?.click();
+      await new Promise((r) => setTimeout(r, 60));
+      const schedItem = [...(dom(overflowMenu).querySelector("[popover]")?.querySelectorAll(".item") || [])].find((b) => b.textContent.includes("Schedules…"));
+      let cardOpen = false, cardWithin = false;
+      if (schedItem) {
+        schedItem.click();
+        await new Promise((r) => setTimeout(r, 140));
+        const chipEl = sr.querySelector("ss-routine-popover");
+        const card = chipEl ? dom(chipEl).querySelector("[popover]") : null;
+        cardOpen = !!card && card.matches(":popover-open");
+        // A real rendered card, not a 0x0 display:none ghost: it must have
+        // actual size AND sit within the viewport.
+        if (card) { const rc = card.getBoundingClientRect(); cardOpen = cardOpen && rc.width > 100 && rc.height > 100; cardWithin = rc.left >= 0 && rc.right <= window.innerWidth && rc.top >= 0 && rc.bottom <= window.innerHeight; }
+        if (card && card.hidePopover) card.hidePopover();
+      }
+      // Room for the key components: name and swatch keep usable width and
+      // the actions cell fits its two controls without wrapping.
+      const nameW = sr.querySelector(".name .text")?.getBoundingClientRect().width || 0;
+      const swatchW = sr.querySelector("ss-swatch-band")?.getBoundingClientRect().width || 0;
       const rowRect = row.getBoundingClientRect();
-      const popRect = pop.getBoundingClientRect();
-      return { textHidden, chipWithinRow: popRect.right <= rowRect.right + 1 && popRect.left >= rowRect.left - 1 };
+      const noOverflow = rowRect.right <= window.innerWidth + 1;
+      return { chipGone, hasSchedules, within, cardOpen, cardWithin, nameW: Math.round(nameW), swatchW: Math.round(swatchW), noOverflow };
     })()`);
     await send("Emulation.clearDeviceMetricsOverride");
     await sleep(120);
@@ -1692,8 +1791,18 @@ async function main() {
       JSON.stringify(mobileSwatchFlow)
     );
     check(
-      "routines (mobile, 390px): the chip collapses to the clock glyph and stays inside the row",
-      !!mobileRoutineFlow && mobileRoutineFlow.textHidden === true && mobileRoutineFlow.chipWithinRow === true,
+      "routines (mobile, 390px): the routine chip leaves the row and Schedules live in the context menu",
+      !!mobileRoutineFlow && mobileRoutineFlow.chipGone === true && mobileRoutineFlow.hasSchedules === true && mobileRoutineFlow.within === true,
+      JSON.stringify(mobileRoutineFlow)
+    );
+    check(
+      "routines (mobile, 390px): Schedules… from the context menu opens the card anchored in view",
+      !!mobileRoutineFlow && mobileRoutineFlow.cardOpen === true && mobileRoutineFlow.cardWithin === true,
+      JSON.stringify(mobileRoutineFlow)
+    );
+    check(
+      "scenes (mobile, 390px): Name and Swatch keep reasonable room and the row never overflows",
+      !!mobileRoutineFlow && mobileRoutineFlow.nameW >= 100 && mobileRoutineFlow.swatchW >= 90 && mobileRoutineFlow.noOverflow === true,
       JSON.stringify(mobileRoutineFlow)
     );
 

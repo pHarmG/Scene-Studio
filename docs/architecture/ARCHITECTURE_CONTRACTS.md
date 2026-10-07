@@ -531,7 +531,13 @@ edits round-trip; unsupported structural edits move the routine to
   supported grammar (time, days, Apply/Play offered dynamically by scene
   motion, enable/disable, delete with two-step confirm) and shows advanced
   automations read-only, labeled Home-Assistant-managed. Archived rows
-  render no routine affordance.
+  render no routine affordance. Positioning: the card prefers anchoring
+  below its opener; when it would not fit, its bottom pins to the viewport
+  bottom and it grows upward (internal scroll only as a tiny-window last
+  resort). Narrow rows (row container <= 700px) restructure for Name /
+  Swatch / Controls priority: the chip leaves the row and schedules open
+  from the row's context menu ("Schedules…", card anchored to the row),
+  and Apply/Play condense into ONE menu control offering both.
 - **Explicitly deferred** (do not invent silently): generic HA automation
   authoring, arbitrary triggers/conditions, sunrise/sunset grammar,
   interpreting arbitrary light-service actions as scenes, scheduled
