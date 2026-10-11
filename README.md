@@ -2,15 +2,34 @@
 
 Provider-neutral lighting scenes for Home Assistant. Author scenes in the
 Workbench, apply and play them back on Hue / WLED / Home Assistant lights,
-control playback from an optional Lovelace card — installed and upgraded by a
-guided wizard that treats your Home Assistant host carefully (read-only
-probes, explicit review, backups, and automatic rollback).
+control playback from an optional Lovelace card — installed from the Home
+Assistant App store like any other add-on, or by a guided wizard that treats
+your Home Assistant host carefully (read-only probes, explicit review,
+backups, and automatic rollback).
 
 - **Backend** — Python command engine + domain core (AppDaemon-hosted), stdlib-only.
 - **Workbench** — static authoring SPA (Vite + Lit), served by the AppDaemon add-on.
 - **HA card** — `custom:scene-studio-card`, an optional daily controller.
-- **Installer** — guided wizard; models Home Assistant API, AppDaemon ssh, and
-  the Scene Studio HTTP endpoint as three independent addresses.
+- **HA add-on** — this repository is its own Supervisor add-on repository;
+  the App store installs it, Supervisor owns updates.
+- **Installer** — guided wizard for installs into an existing AppDaemon
+  add-on; models Home Assistant API, AppDaemon ssh, and the Scene Studio
+  HTTP endpoint as three independent addresses.
+
+## Install from the Home Assistant App store (recommended)
+
+1. **Settings > Add-ons > App store > ⋮ > Repositories**, add
+   `https://github.com/pHarmG/Scene-Studio`.
+2. Install **Scene Studio** from the App store (first build takes a few
+   minutes), fill in the **Configuration** tab (everything optional —
+   `mode: setup` keeps fresh installs in the safe `registry_admin` mode),
+   and press **Start**.
+3. Open `http://<your-home-assistant-host>:5050/local/scene_studio/`.
+
+Full walkthrough: [docs/installation/ADDON_INSTALL.md](docs/installation/ADDON_INSTALL.md).
+Updates are delivered by Supervisor.
+
+## Install into an existing AppDaemon add-on (workstation wizard)
 
 ## Install from GitHub Releases
 

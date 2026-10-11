@@ -608,6 +608,7 @@ export function createStore(client) {
     },
 
     reviewUpdate() {
+      if (state.status?.product?.build?.delivery === "addon") return;
       if (state.updateCheck?.state !== "available" || updateRunning(state.updateExecution) || state.updateExecution?.recovery_required) return;
       state.updateConfirmation = { installed: state.status?.product?.build?.version || "unknown", target: state.updateCheck.latest_version };
       notify();

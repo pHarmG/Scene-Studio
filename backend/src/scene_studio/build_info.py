@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import os
 import re
 import subprocess
 from datetime import datetime, timezone
@@ -42,8 +43,8 @@ def checkout_build(root: Path, channel: str = "local", tag: str | None = None) -
         source_digest = digest.hexdigest()
     except (OSError, subprocess.CalledProcessError):
         sha, dirty, source_digest = None, True, None
-    if channel not in ("local", "release"):
-        raise ValueError("Build channel must be local or release")
+    if channel not in ("local", "release", "addon"):
+        raise ValueError("Build channel must be local, release, or addon")
     if channel == "release":
         if tag != "v" + version:
             raise ValueError("Release tag must match root VERSION")
@@ -53,6 +54,13 @@ def checkout_build(root: Path, channel: str = "local", tag: str | None = None) -
             raise ValueError("Release tag must identify HEAD")
         if SEMVER.fullmatch(version).group(4):
             raise ValueError("Stable release builds require a stable VERSION")
+    if channel == "addon":
+        # Add-on image builds run outside a git checkout (Supervisor builds on
+        # the user's machine from a Docker context); the add-on version is the
+        # identity and the runtime delivery flag completes the picture.
+        if tag != "v" + version:
+            raise ValueError("Add-on build tag must match root VERSION")
+        sha, dirty, source_digest = None, False, None
     return {"version": version, "update_protocol": 1, "source_sha": sha, "short_sha": sha[:7] if sha else None,
             "source_tree_sha256": source_digest,
             "channel": channel, "dirty": dirty, "tag": tag if channel == "release" else None,
@@ -63,9 +71,14 @@ def checkout_build(root: Path, channel: str = "local", tag: str | None = None) -
 def get_build_info() -> dict:
     bundled = Path(__file__).with_name("build-info.json")
     if bundled.is_file():
-        return json.loads(bundled.read_text(encoding="utf-8"))
-    root = Path(__file__).resolve().parents[3]
-    if (root / "VERSION").is_file():
-        return checkout_build(root)
-    # Incomplete source copies must never claim an official version/build.
-    return {"version": None, "source_sha": None, "short_sha": None, "channel": "unknown", "dirty": None, "built_at": None, "tag": None, "source_tree_sha256": None}
+        info = json.loads(bundled.read_text(encoding="utf-8"))
+    else:
+        root = Path(__file__).resolve().parents[3]
+        if (root / "VERSION").is_file():
+            info = checkout_build(root)
+        else:
+            # Incomplete source copies must never claim an official version/build.
+            info = {"version": None, "source_sha": None, "short_sha": None, "channel": "unknown", "dirty": None, "built_at": None, "tag": None, "source_tree_sha256": None}
+    if os.environ.get("SCENE_STUDIO_ADDON") == "1":
+        info = {**info, "delivery": "addon"}
+    return info

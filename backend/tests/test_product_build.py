@@ -123,6 +123,35 @@ def test_installed_identity_without_checkout(tmp_path, monkeypatch):
         module.get_build_info.cache_clear()
 
 
+def test_addon_build_channel_identity(tmp_path):
+    # Add-on images build outside git; the version-verified tag is the identity.
+    (tmp_path / "VERSION").write_text("0.1.0")
+    info = checkout_build(tmp_path, "addon", "v0.1.0")
+    assert info["channel"] == "addon" and info["version"] == "0.1.0"
+    assert info["source_sha"] is None and info["source_tree_sha256"] is None
+    assert info["dirty"] is False and info["tag"] is None
+    with pytest.raises(ValueError, match="match root VERSION"):
+        checkout_build(tmp_path, "addon", "v0.2.0")
+    with pytest.raises(ValueError, match="local, release, or addon"):
+        checkout_build(tmp_path, "staging", None)
+
+
+def test_addon_delivery_flag_only_with_environment(monkeypatch, tmp_path):
+    import scene_studio.build_info as module
+    identity = {"version": "0.1.0", "channel": "addon", "source_sha": None, "dirty": False}
+    (tmp_path / "build-info.json").write_text(json.dumps(identity))
+    monkeypatch.setattr(module, "__file__", str(tmp_path / "build_info.py"))
+    monkeypatch.setenv("SCENE_STUDIO_ADDON", "1")
+    module.get_build_info.cache_clear()
+    try:
+        assert module.get_build_info() == {**identity, "delivery": "addon"}
+        monkeypatch.delenv("SCENE_STUDIO_ADDON")
+        module.get_build_info.cache_clear()
+        assert module.get_build_info() == identity
+    finally:
+        module.get_build_info.cache_clear()
+
+
 def test_semver_prerelease_order():
     assert version_key("1.0.0-rc.2") < version_key("1.0.0-rc.10") < version_key("1.0.0")
     for invalid in ("1.0", "01.0.0", "1.0.0-rc..1", "1.0.0-01"):

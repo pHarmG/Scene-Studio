@@ -956,14 +956,18 @@ class SsApp extends SsLightElement {
     const messageExtra = !!update.message &&
       update.message.toLowerCase().replace(/[.\s]+$/g, "") !== label.toLowerCase().replace(/[.\s]+$/g, "");
     const execution = s.updateExecution && s.updateExecution.state !== "idle" ? s.updateExecution : null;
+    // Add-on installs have no independent update companion: Supervisor owns
+    // the lifecycle, so only the informational check remains here.
+    const addonDelivery = s.status?.product?.build?.delivery === "addon";
     // The new bundle is live on the server but this page still runs the old
     // one: the auto-reloader navigates (with retries); this button is the
     // visible fallback for environments where a scripted navigation cannot
     // apply (the same guard updateReloadUrl encodes for dev bundles).
     const reloadPending = execution?.state === "succeeded" &&
       !!s.status?.engine?.ok && s.status?.product?.build?.version !== localBuild.version;
-    const companionHint = execution?.state === "failed" ||
-      update.state === "unchecked" || update.state === "unavailable" || update.state === "error";
+    const companionHint = !addonDelivery &&
+      (execution?.state === "failed" ||
+        update.state === "unchecked" || update.state === "unavailable" || update.state === "error");
     return html`
       <p class="update-state" role="status">${label}</p>
       ${update.latest_version
@@ -971,10 +975,10 @@ class SsApp extends SsLightElement {
         : messageExtra ? html`<p class="update-message">${update.message}</p>` : ""}
       <div class="update-actions">
         <button class="ss-btn" ?disabled=${update.state === "checking"} @click=${() => this.store.checkUpdates()}>Check for updates</button>
-        ${update.state === "available" ? html`<button class="ss-btn update-apply" ?disabled=${!!s.updateConfirmation || updateRunning(s.updateExecution) || s.updateExecution?.recovery_required} @click=${() => this.store.reviewUpdate()}>Update to v${update.latest_version}</button>` : ""}
+        ${update.state === "available" && !addonDelivery ? html`<button class="ss-btn update-apply" ?disabled=${!!s.updateConfirmation || updateRunning(s.updateExecution) || s.updateExecution?.recovery_required} @click=${() => this.store.reviewUpdate()}>Update to v${update.latest_version}</button>` : ""}
       </div>
       ${update.release_url ? html`<p class="update-notes"><a href=${update.release_url} target="_blank" rel="noopener noreferrer">${update.state === "available" ? "Release notes" : "Open GitHub Releases"}</a></p>` : ""}
-      ${s.updateConfirmation ? html`<div class="update-confirmation" role="dialog" aria-label="Confirm Scene Studio update">
+      ${!addonDelivery && s.updateConfirmation ? html`<div class="update-confirmation" role="dialog" aria-label="Confirm Scene Studio update">
         <p class="confirm-target">Installed: v${s.updateConfirmation.installed} → Target: v${s.updateConfirmation.target}</p>
         <p>Scene Studio executable and static files will be replaced. User scenes, stores and configuration are preserved. AppDaemon will restart.</p>
         <div class="update-actions">
@@ -982,7 +986,7 @@ class SsApp extends SsLightElement {
           <button class="ss-btn" @click=${() => this.store.cancelUpdate()}>Cancel</button>
         </div>
       </div>` : ""}
-      ${execution ? html`<div class="update-progress ${execution.state === "succeeded" ? "ok" : execution.state === "failed" ? "err" : ""}" role="status">
+      ${!addonDelivery && execution ? html`<div class="update-progress ${execution.state === "succeeded" ? "ok" : execution.state === "failed" ? "err" : ""}" role="status">
         <strong>${execution.rolled_back ? "Update rolled back" : executionLabels[execution.state] || "Update status"}</strong>
         ${reloadPending ? html`<p class="reload-note">Reloading the updated Workbench…</p>` : ""}
         ${execution.message ? html`<p>${execution.message}</p>` : ""}
@@ -990,6 +994,7 @@ class SsApp extends SsLightElement {
         ${reloadPending ? html`<button class="ss-btn" @click=${() => window.location.reload()}>Reload Workbench now</button>` : ""}
         ${execution.recovery_required ? html`<button class="ss-btn" @click=${() => this.store.inspectUpdate()}>Refresh update status</button>` : ""}
       </div>` : ""}
+      ${addonDelivery ? html`<p class="update-hint">Updates are managed by Home Assistant — open Settings > Add-ons > Scene Studio and press Update.</p>` : ""}
       ${companionHint ? html`<p class="update-hint">Updates require the independent update companion provisioned by the guided installer.</p>` : ""}
     `;
   }

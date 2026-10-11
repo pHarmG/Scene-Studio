@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -9,6 +10,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend/src"))
 from scene_studio.build_info import checkout_build
+
+
+def addon_version(root=ROOT):
+    """Quoted ``version`` from the add-on manifest at the repository root."""
+    path = root / "config.yaml"
+    if not path.is_file():
+        return None
+    match = re.search(r'(?m)^version:\s*"([^"\s]+)"\s*$', path.read_text(encoding="utf-8"))
+    if not match:
+        raise ValueError("Add-on config.yaml must declare a quoted version")
+    return match.group(1)
 
 
 def validate_versions(root=ROOT):
@@ -19,6 +31,9 @@ def validate_versions(root=ROOT):
     for value in (project["version"], package["version"], lock["version"], lock["packages"][""]["version"]):
         if value != version:
             raise ValueError("Product version declarations must match root VERSION")
+    addon = addon_version(root)
+    if addon is not None and addon != version:
+        raise ValueError("Add-on config.yaml version must match root VERSION")
     return version
 
 

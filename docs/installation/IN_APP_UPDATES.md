@@ -1,5 +1,11 @@
 # Transactional Workbench updates (protocol 1)
 
+This mechanism applies to workstation-installed Scene Studio (the guided
+installer inside an existing AppDaemon add-on). The HA add-on route does NOT
+provision the supervisor: Supervisor owns the add-on lifecycle there, and the
+Workbench reports the Supervisor-managed delivery (`product.build.delivery ==
+"addon"`) instead of offering an in-app update.
+
 The installer provisions a separate `scene_studio_update` AppDaemon app. Its
 modules live directly in `apps/`, outside `apps/scene_studio/`, and import no
 Scene Studio modules. Updates NEVER replace the supervisor itself. Updating

@@ -1,0 +1,18 @@
+# Supervisor builds the add-on with the repository root as the Docker build
+# context. Keep the context to exactly what the Dockerfile needs.
+*
+!backend/src/
+!backend/pyproject.toml
+!workbench/
+!scripts/version.py
+!run.sh
+!render_config.py
+!VERSION
+# Build and dependency noise inside the re-included trees.
+**/__pycache__/
+**/*.pyc
+backend/src/scene_studio/build-info.json
+workbench/node_modules/
+workbench/dist/
+workbench/test-results/
+workbench/playwright-report/

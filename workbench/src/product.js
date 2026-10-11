@@ -5,6 +5,7 @@ export const localBuild = typeof __SCENE_STUDIO_BUILD__ === "undefined"
 
 export function buildLabel(build) {
   if (!build?.version) return "Build unknown";
+  if (build.channel === "addon") return `v${build.version} • add-on`;
   return `v${build.version} • ${build.channel || "unknown"} ${build.short_sha || "unknown"}${build.dirty ? " (modified)" : ""}`;
 }
 

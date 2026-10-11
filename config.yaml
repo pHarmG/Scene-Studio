@@ -1,0 +1,41 @@
+# Scene Studio as a Home Assistant add-on. This repository doubles as the
+# add-on repository: paste its URL in Settings > Add-ons > App store >
+# Repositories and install from there. Supervisor builds the image on the
+# user's machine from the repository root (the build context), so the version
+# here must always match the root VERSION file (gated by scripts/version.py).
+name: Scene Studio
+version: "0.4.0"
+slug: scene_studio
+description: Lighting scenes for Home Assistant — discover lights, build scenes
+  in the web Workbench, and apply them by hand or from Home Assistant.
+url: https://github.com/pHarmG/Scene-Studio
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+homeassistant_api: true
+hostname: scene-studio
+ports:
+  5050/tcp: 5050
+ports_description:
+  5050/tcp: Scene Studio Workbench and API (AppDaemon HTTP; remap here if the
+    community AppDaemon add-on already uses this host port)
+options:
+  mode: setup
+  hue_host: ""
+  hue_key: ""
+  hue_bridge_id: ""
+  wled_host: ""
+  hyperhdr_host: ""
+  ignored_ha_entity_ids: []
+schema:
+  mode: list(setup|normal|read_only)
+  hue_host: str?
+  hue_key: password?
+  hue_bridge_id: str?
+  wled_host: str?
+  hyperhdr_host: str?
+  ignored_ha_entity_ids:
+    - str

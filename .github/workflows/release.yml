@@ -8,7 +8,25 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 jobs:
+  addon-gate:
+    name: Add-on image build gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate versions (includes the add-on manifest)
+        run: python scripts/version.py
+      - name: Add-on renderer and manifest tests
+        run: |
+          python -m pip install 'pytest>=8.3.0,<9.0.0'
+          python -m pytest tests/installer/test_addon.py -q
+      - name: Build the add-on image the way Supervisor would
+        run: docker build --build-arg BUILD_VERSION="$(cat VERSION | tr -d '[:space:]')" -t scene-studio-addon:gate .
+
   release:
+    needs: addon-gate
     runs-on: windows-latest
     permissions:
       contents: write
@@ -78,9 +96,9 @@ jobs:
         run: |
           $version = (Get-Content VERSION -Raw).Trim()
           @'
-          Download Scene-Studio-v<version>.zip and SHA256SUMS.txt, verify the checksum, extract, then run pwsh ./Install-SceneStudio.ps1 (or python installer/ui/server.py).
+          Install from the Home Assistant App store: Settings > Add-ons > App store > Repositories > add https://github.com/pHarmG/Scene-Studio, then install Scene Studio. Updates are delivered by Supervisor.
 
-          Alternatively download Get-SceneStudio.ps1 and run it with PowerShell 7. It retrieves and verifies the complete payload before opening the same guided installer. Private repository access requires signing in for manual downloads or an optional SCENE_STUDIO_GITHUB_TOKEN with Contents read permission for the bootstrap.
+          Alternatively download Scene-Studio-v<version>.zip and SHA256SUMS.txt, verify the checksum, extract, then run pwsh ./Install-SceneStudio.ps1 (or python installer/ui/server.py) to install into an existing AppDaemon add-on from your computer. Or download Get-SceneStudio.ps1 and run it with PowerShell 7: it retrieves and verifies the complete payload before opening the same guided installer. Private repository access requires signing in for manual downloads or an optional SCENE_STUDIO_GITHUB_TOKEN with Contents read permission for the bootstrap.
 
           The ZIP is the complete product. GitHub source-code archives are for developers. The guided installer provisions the independent recovery companion; Workbench Update requires explicit version confirmation. Update checks never install automatically.
           '@ | ForEach-Object { $_ -replace '<version>', $version } | Set-Content -LiteralPath dist/release-notes.md

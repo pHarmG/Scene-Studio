@@ -2,8 +2,9 @@
 
 Scene Studio is a provider-neutral lighting-scene product for Home Assistant:
 a Python domain core + command engine (AppDaemon-hosted), a static Workbench
-SPA for authoring, an optional Lovelace control card, and a guided installer
-for fresh installs and upgrades.
+SPA for authoring, an optional Lovelace control card, a Supervisor add-on for
+App-store installation, and a guided installer for fresh installs and upgrades
+into an existing AppDaemon add-on.
 
 Source of truth: **this repository** (`pHarmG/Scene-Studio`, local workspace
 `D:\Scene-Studio`). The project was extracted from the `pHarmG/Home-Tech`
@@ -17,6 +18,7 @@ Scene Studio implementation in Home-Tech.
 | `backend/` | Python package (`src/scene_studio`), fixtures, full test suite. Stdlib-only core; the AppDaemon adapter lazily imports `requests` + AppDaemon. |
 | `workbench/` | Static authoring SPA (Vite + Lit). `npm run build|smoke|browser`. Mocks mirror `backend/fixtures/*.sample.json`. |
 | `home-assistant/scene-studio-card/` | Optional Lovelace card (`custom:scene-studio-card`; `test-bench-scene-controls-card` is a compatibility alias). Build: `npm run build`, tests: `npm test`. |
+| Root add-on (`config.yaml`, `repository.yaml`, `Dockerfile`, `run.sh`, `render_config.py`) | This repository IS a Supervisor add-on repository: the App store installs Scene Studio with Supervisor owning install/start/update lifecycle. The add-on lives at the repository ROOT because Supervisor's build context is the add-on directory — only that placement lets the Dockerfile COPY the sibling `backend/` and `workbench/` trees (`.dockerignore` narrows the context). Base images are staged per-arch in the Dockerfile (`build.yaml` is obsolete since the BuildKit migration). Tests: `python -m pytest tests/installer/test_addon.py -q`. |
 | `installer/` | Guided wizard (`Install-SceneStudio.ps1`), browser wizard (`ui/server.py` + `ui/static/`), internal installer, deployers, profile tool, manifest verifier. |
 | `scripts/` | `build_release.py` (release ZIP packager), `security/scan_secrets.py` (secret scanner — run before every commit). |
 | `tests/` | Cross-cutting/installer acceptance support. |
@@ -45,6 +47,17 @@ Scene Studio implementation in Home-Tech.
 - **Installer** (`installer/`): the only code that writes to a target
   Home Assistant/AppDaemon host. Deployers keep backup → stage → hash-verify
   → activate → health-check → rollback semantics; do not bypass them.
+- **HA add-on** (root `config.yaml`/`Dockerfile`/`run.sh`/`render_config.py`):
+  the fresh-install delivery track owned by Supervisor, not by the installer.
+  `render_config.py` renders `/data` runtime configuration from add-on
+  options at every start; secret values land only in the add-on-private
+  `secrets.yaml` (apps.yaml references names). Fresh installs start in
+  `registry_admin` via the `mode: setup` option. The independent update
+  supervisor is NOT provisioned on this track — Supervisor owns updates — so
+  never "upgrade" the add-on route with installer/deployer machinery, and
+  never grow the option schema without extending `render_config.py` + its
+  tests together. `config.yaml` version must match root `VERSION`
+  (`scripts/version.py` gates this).
 - **Runtime update supervisor** (`installer/runtime/`): provisioned by the
   guided installer as an independent AppDaemon app outside the replaceable
   backend. Workbench confirmation authorizes only the exact requested release.
