@@ -31,7 +31,7 @@ import sys
 
 SECRET_NAME_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 HOST_RE = re.compile(r"^[A-Za-z0-9._-]+(:\d+)?$")
-TARGET_PATH_RE = re.compile(r"^/addon_configs/[^/]+$")
+TARGET_PATH_RE = re.compile(r"^/(?:app_configs|addon_configs)/[A-Za-z0-9_-]+$")
 RUNTIME_MODES = ("registry_admin", "read_only", "normal")
 CONTENTION_POLICIES = ("yield", "takeover", "ignore")
 ENTITY_ID_RE = re.compile(r"^[a-z_]+\.[a-z0-9_]+$")
@@ -178,7 +178,7 @@ def validate_profile(profile):
     if not isinstance(root, str) or not TARGET_PATH_RE.match(root):
         errors.append(
             "appdaemon_config_root: expected the AppDaemon add-on config directory on the HA host, "
-            "e.g. '/addon_configs/a0d7b954_appdaemon' (find the exact slug under /addon_configs)"
+            "e.g. '/addon_configs/a0d7b954_appdaemon' (find the exact slug under /app_configs or /addon_configs)"
         )
     store_root = profile.get("store_root")
     if not isinstance(store_root, str) or not store_root.startswith("/"):

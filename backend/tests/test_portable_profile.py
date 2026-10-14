@@ -12,6 +12,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_ROOT = REPO_ROOT / "backend"
 sys.path.insert(0, str(SRC_ROOT / "src"))
@@ -47,6 +49,21 @@ def _valid_profile(**overrides):
 def test_example_profile_validates():
     module = _module()
     assert module.validate_profile(_example_profile()) == _example_profile()
+
+
+@pytest.mark.parametrize('mount_root', ['/addon_configs', '/app_configs'])
+def test_config_mount_names_preserve_requested_target(mount_root):
+    module = _module()
+    profile = _valid_profile(appdaemon_config_root=f'{mount_root}/a0d7b954_appdaemon')
+    assert module.validate_profile(profile)['appdaemon_config_root'] == profile['appdaemon_config_root']
+
+
+@pytest.mark.parametrize('root', ['/app_configs', '/app_configs/..', '/app_configs/demo/apps',
+                                 '/addon_configs/..', '/local_apps/demo', "/app_configs/a;echo unsafe"])
+def test_config_root_requires_one_safe_slug(root):
+    module = _module()
+    with pytest.raises(module.ProfileError):
+        module.validate_profile(_valid_profile(appdaemon_config_root=root))
 
 
 def test_unknown_top_level_key_fails_loudly():

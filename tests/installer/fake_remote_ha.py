@@ -417,8 +417,7 @@ class FakeHost:
 
     def cmd_curl(self, command: str) -> tuple[int, str]:
         if "scene_studio_update_api" in command:
-            configs = self.resolve("/addon_configs")
-            for candidate in configs.iterdir():
+            for candidate in self.config_candidates():
                 if all((candidate / "apps" / name).is_file() for name in ("scene_studio_update_supervisor.py", "scene_studio_release.py")):
                     return 0, json.dumps({"status": 200, "body": {"state": "idle"}})
             raise CommandError(7, "")
@@ -429,17 +428,21 @@ class FakeHost:
             raise CommandError(7, "")
         return 0, json.dumps({"status": 200, "body": {"runtime": runtime}})
 
+    def config_candidates(self):
+        for mount_root in ("/app_configs", "/addon_configs"):
+            configs = self.resolve(mount_root)
+            if configs.is_dir():
+                yield from sorted(configs.iterdir())
+
     def api_state(self) -> dict | None:
         # Discover whichever addon config root carries a Scene Studio backend
         # (the wizard may select any candidate root, not the default one).
         backend = None
-        addon_configs = self.resolve("/addon_configs")
-        if addon_configs.is_dir():
-            for candidate in sorted(addon_configs.iterdir()):
-                marker = candidate / "apps" / "scene_studio" / "appdaemon_adapter" / "adapter.py"
-                if marker.is_file():
-                    backend = candidate / "apps" / "scene_studio"
-                    break
+        for candidate in self.config_candidates():
+            marker = candidate / "apps" / "scene_studio" / "appdaemon_adapter" / "adapter.py"
+            if marker.is_file():
+                backend = candidate / "apps" / "scene_studio"
+                break
         if backend is None:
             return None
         mode = self.apps_mode()
@@ -454,13 +457,11 @@ class FakeHost:
         # Discover whichever addon config root serves the Workbench (the
         # wizard may select any candidate root, not the default one).
         index = None
-        addon_configs = self.resolve("/addon_configs")
-        if addon_configs.is_dir():
-            for candidate in sorted(addon_configs.iterdir()):
-                candidate_index = candidate / "www" / "scene_studio" / "index.html"
-                if candidate_index.is_file():
-                    index = candidate_index
-                    break
+        for candidate in self.config_candidates():
+            candidate_index = candidate / "www" / "scene_studio" / "index.html"
+            if candidate_index.is_file():
+                index = candidate_index
+                break
         if index is None:
             raise CommandError(1, "fake-ssh: served index missing")
         actual = hashlib.sha256(index.read_bytes()).hexdigest()

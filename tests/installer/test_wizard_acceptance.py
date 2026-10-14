@@ -244,9 +244,13 @@ def test_wizard_inferred_appdaemon_http_unreachable_fails_actionable(release_dir
     _assert_no_remote_writes(state_dir)
 
 
-def test_wizard_auto_detects_single_addon_root(release_dir, tmp_path):
+@pytest.mark.parametrize('mount_root', ['/addon_configs', '/app_configs'])
+def test_wizard_auto_detects_single_addon_root(release_dir, tmp_path, mount_root):
     state_dir = tmp_path / "fake-ha-state"
     _seed_fresh_target(state_dir)
+    if mount_root == '/app_configs':
+        (state_dir / 'fs/addon_configs').rename(state_dir / 'fs/app_configs')
+    expected_root = f'{mount_root}/fake_addon'
     with FakeHaApi() as api:
         env = _wizard_env(tmp_path, state_dir)
         answers = _write_answers(
@@ -259,7 +263,12 @@ def test_wizard_auto_detects_single_addon_root(release_dir, tmp_path):
     output = _strip_ansi(result.stdout + result.stderr)
     assert result.returncode == 0, output[-3000:]
     assert "found exactly one candidate" in output
-    assert f"using {ADDON_ROOT}" in output
+    assert f"using {expected_root}" in output
+    addon = state_dir / 'fs' / expected_root.strip('/')
+    assert (addon / 'apps/scene_studio/appdaemon_adapter/adapter.py').is_file()
+    assert (addon / 'www/scene_studio/index.html').is_file()
+    assert (addon / 'apps/scene_studio_update_supervisor.py').is_file()
+    assert (addon / 'apps/scene_studio_release.py').is_file()
 
 
 def test_wizard_multiple_addon_root_selection(release_dir, tmp_path):
@@ -360,10 +369,14 @@ def test_wizard_zero_mutation_before_confirmation(release_dir, tmp_path):
     assert not (state_dir / "fs" / ADDON_ROOT.strip("/") / "apps" / "scene_studio").exists()
 
 
-def test_wizard_upgrade_preserves_unrelated_apps_yaml(release_dir, tmp_path):
+@pytest.mark.parametrize('mount_root', ['/addon_configs', '/app_configs'])
+def test_wizard_upgrade_preserves_unrelated_apps_yaml(release_dir, tmp_path, mount_root):
     state_dir = tmp_path / "fake-ha-state"
     _seed_fresh_target(state_dir)
-    addon_fs = state_dir / "fs" / ADDON_ROOT.strip("/")
+    if mount_root == '/app_configs':
+        (state_dir / 'fs/addon_configs').rename(state_dir / 'fs/app_configs')
+    addon_root = f'{mount_root}/fake_addon'
+    addon_fs = state_dir / "fs" / addon_root.strip("/")
     backend = addon_fs / "apps" / "scene_studio" / "appdaemon_adapter"
     backend.mkdir(parents=True, exist_ok=True)
     (backend / "adapter.py").write_text("# previous backend\n", encoding="utf-8")
@@ -390,6 +403,7 @@ def test_wizard_upgrade_preserves_unrelated_apps_yaml(release_dir, tmp_path):
             tmp_path / "answers.json",
             ha_url=f"http://127.0.0.1:{api.port}",
             appdaemon_http_url=f"http://appdaemon.example.test:{api.port}",
+            appdaemon_config_root=addon_root,
         )
         result = _run_wizard(release_dir, answers, env)
     output = _strip_ansi(result.stdout + result.stderr)

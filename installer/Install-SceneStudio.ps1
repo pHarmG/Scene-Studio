@@ -646,20 +646,23 @@ try {
     Write-Step '4/9 AppDaemon configuration directory'
     $AddonRoot = [string](Get-TopologyAnswer 'appdaemon_config_root' '')
     if (-not $AddonRoot) {
-        Write-Detail 'Auto-detecting AppDaemon under /addon_configs ...'
+        Write-Detail 'Auto-detecting AppDaemon under /app_configs and /addon_configs ...'
         $candidates = @()
-        try {
-            $names = (Invoke-WizardSsh -Command "ls -1 '/addon_configs'") -split "`r?`n" | Where-Object { $_ }
+        foreach ($mountRoot in @('/app_configs', '/addon_configs')) {
+          try {
+            $names = (Invoke-WizardSsh -Command "ls -1 '$mountRoot'") -split "`r?`n" | Where-Object { $_ }
             foreach ($name in $names) {
-                $candidate = "/addon_configs/$name"
+                $candidate = "$mountRoot/$name"
                 $q = ConvertTo-BashSingleQuoted $candidate
                 try {
                     $null = Invoke-WizardSsh -Command "test -f '$q/appdaemon.yaml' || test -d '$q/apps'"
                     $candidates += $candidate
                 } catch { continue }
             }
-        } catch {
-            Write-Detail "auto-detection unavailable ($($_.Exception.Message.Split("`n")[0]))"
+          } catch {
+            # Either mount may be absent depending on the SSH app version.
+            continue
+          }
         }
         Record-Probe 'appdaemon_root_autodetect' "candidates=$($candidates.Count)"
         if ($candidates.Count -eq 1) {
@@ -687,7 +690,7 @@ try {
             }
             Write-Detail "selected: $AddonRoot"
         } else {
-            Write-Detail 'no candidates detected under /addon_configs'
+            Write-Detail 'no candidates detected under /app_configs or /addon_configs'
             if ($Unattended) {
                 throw 'Automatic setup detection was incomplete. Configure advanced topology: provide ssh_host and appdaemon_config_root in the answers file.'
             }
@@ -703,7 +706,7 @@ try {
             $script:Topology.capabilities.ssh_filesystem_available = $true
             $script:Topology.capabilities.supervisor_restart_available = $restartOk
             if ($restartOk) { $script:Topology.appdaemon_restart_strategy = 'supervisor' }
-            Write-Detail 'On Home Assistant OS the AppDaemon add-on config lives under /addon_configs/<add-on slug>'
+            Write-Detail 'On Home Assistant OS the AppDaemon add-on config lives under /app_configs/<add-on slug> (or /addon_configs/<add-on slug> on older SSH apps)'
             Write-Detail '(https://github.com/hassio-addons/addon-appdaemon).'
             $AddonRoot = Read-Host -Prompt 'Enter the AppDaemon config directory (e.g. /addon_configs/a0d7b954_appdaemon)'
         }
@@ -715,7 +718,7 @@ try {
     $rootProbe = Invoke-WizardSsh -Command "test -d '$quotedRoot' && echo addon_root=present || echo addon_root=absent"
     Record-Probe 'appdaemon_root' "$AddonRoot $(if ($rootProbe -match 'addon_root=absent') { 'ABSENT' } else { 'present' })"
     if ($rootProbe -match 'addon_root=absent') {
-        throw "AppDaemon config directory '$AddonRoot' does not exist on the target. Check the path (find it under /addon_configs on the HA host)."
+        throw "AppDaemon config directory '$AddonRoot' does not exist on the target. Check the path (find it under /app_configs or /addon_configs on the HA host)."
     }
     Write-Detail "using $AddonRoot"
 

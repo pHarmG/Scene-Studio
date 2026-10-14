@@ -353,7 +353,7 @@ function renderAdvancedTopology(container) {
 
 function renderStep4(container) {
   container.append(
-    ...stepHeading(4, "AppDaemon config directory", "Where the Scene Studio app and Workbench live on the target — usually the AppDaemon add-on slug under /addon_configs."),
+    ...stepHeading(4, "AppDaemon config directory", "Where the Scene Studio app and Workbench live on the target — usually the AppDaemon add-on slug under /app_configs or /addon_configs."),
   );
   const a = answers();
   const rootProbe = state.probes.appdaemon_root;

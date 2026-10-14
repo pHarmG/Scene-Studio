@@ -32,7 +32,7 @@ Two roles are independent and separately configured:
 ### Common HAOS/Supervised path
 
 After authenticating HA, the wizard tries SSH to its hostname using existing
-key access, discovers AppDaemon candidates under `/addon_configs` using
+key access, discovers AppDaemon candidates under `/app_configs` (Terminal & SSH 10.5.0+) or `/addon_configs` (older SSH apps) using
 `appdaemon.yaml` or `apps/` markers, automatically selects exactly one candidate,
 and probes AppDaemon HTTP on port 5050. Multiple candidates require a choice.
 The authenticated HA service list must advertise `hassio.addon_restart` before
@@ -97,7 +97,7 @@ from the environment.
 | --- | --- |
 | Home Assistant + AppDaemon add-on | AppDaemon 4.5+ serving its HTTP port (default `5050`) |
 | ssh access to the HA host | The installers run remote commands over ssh (key auth recommended) |
-| AppDaemon add-on config directory | e.g. `/addon_configs/a0d7b954_appdaemon` — find your exact slug on the HA host under `/addon_configs` |
+| AppDaemon add-on config directory | e.g. `/addon_configs/a0d7b954_appdaemon` — find your exact slug on the HA host under `/app_configs` (Terminal & SSH 10.5.0+) or `/addon_configs` (older SSH apps) |
 | A Home Assistant long-lived access token | Export as `SCENE_STUDIO_HA_TOKEN` for install health checks |
 | Provider access (optional per provider) | Hue bridge CLIP v2 application key and/or a reachable WLED controller. HA lights need nothing extra. |
 | PowerShell 7 (`pwsh`) on the workstation | Windows PowerShell 5.1 is NOT supported (it corrupts ssh payloads) |
@@ -220,3 +220,11 @@ Replace the bundle with a freshly generated one and re-run the installer.
 The backend deployer refuses to change your runtime mode: `apps.yaml`
 (also `registry_admin`/`read_only`) is yours, and a post-restart mode change
 fails the deploy and rolls back.
+
+Terminal & SSH 10.5.0 renamed its SSH-visible `/addon_configs` mount to
+`/app_configs` and `/addons` to `/local_apps`. Both config mount names are
+supported by the wizards, deployment profiles, and deployers. Existing profiles
+and unattended answers must use the path exposed by their SSH endpoint; if the
+old path is absent, change only `appdaemon_config_root` to `/app_configs/<same slug>`.
+The installer fails before writing when a configured path is absent. This does
+not change AppDaemon-internal `/config` paths or Supervisor-owned installation.

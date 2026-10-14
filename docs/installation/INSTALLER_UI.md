@@ -36,7 +36,7 @@ Ctrl+C stops the UI.
 3. **AppDaemon host** — the ssh target (key auth required), the ssh port,
    and the Scene Studio/AppDaemon HTTP address (inferred from the ssh
    target + port 5050; asked only if inference is unreachable).
-4. **Config directory** — auto-detects AppDaemon under `/addon_configs`,
+4. **Config directory** — auto-detects AppDaemon under `/app_configs` (Terminal & SSH 10.5.0+) or `/addon_configs` (older SSH apps),
    lets you pick, and reads the target read-only (fresh install vs
    upgrade, current runtime mode).
 5. **Lighting sources** — HA lights / Hue / WLED / hyperHDR, with
@@ -77,3 +77,11 @@ The server binds to the loopback interface only, requires a per-launch
 session token on every API call, and rejects unexpected `Host` headers.
 Do not expose it beyond your machine (`--host` warns if you try); the token
 exists so other pages open in your browser cannot drive the installer.
+
+Terminal & SSH 10.5.0 renamed its SSH-visible `/addon_configs` mount to
+`/app_configs` and `/addons` to `/local_apps`. Both config mount names are
+supported by the wizards, deployment profiles, and deployers. Existing profiles
+and unattended answers must use the path exposed by their SSH endpoint; if the
+old path is absent, change only `appdaemon_config_root` to `/app_configs/<same slug>`.
+The installer fails before writing when a configured path is absent. This does
+not change AppDaemon-internal `/config` paths or Supervisor-owned installation.

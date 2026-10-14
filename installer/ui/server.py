@@ -626,30 +626,27 @@ class InstallerSession:
                 return {
                     "status": "fail",
                     "detail": f"AppDaemon config directory '{chosen}' does not exist on the target. "
-                    "Find the exact add-on slug under /addon_configs on the HA host.",
+                    "Find the exact add-on slug under /app_configs or /addon_configs on the HA host.",
                     "data": {"selected": str(chosen)},
                 }
             return {"status": "ok", "detail": f"using {chosen}", "data": {"selected": str(chosen), "candidates": [str(chosen)]}}
-        # auto-detect under /addon_configs (read-only)
-        try:
-            names_output = self._ssh_or_fail("ls -1 '/addon_configs'")
-        except UiError:
-            return {
-                "status": "skipped",
-                "detail": "Auto-detection unavailable (ssh target not reachable/tested); enter the directory manually.",
-                "data": {},
-            }
-        names = [line.strip() for line in names_output.splitlines() if line.strip()]
+        # SSH apps expose different mount names; probe both read-only.
         candidates: list[str] = []
-        for name in names:
-            candidate = f"/addon_configs/{name}"
-            q = bash_single_quote(candidate)
-            result = ssh_probe_command(
-                find_tool("ssh"), self._ssh_destination(), int(self.answers.get("ssh_port") or 22),
-                f"test -f '{q}/appdaemon.yaml' || test -d '{q}/apps'", timeout=15,
-            )
-            if result.returncode == 0:
-                candidates.append(candidate)
+        for mount_root in ("/app_configs", "/addon_configs"):
+            try:
+                names_output = self._ssh_or_fail(f"ls -1 '{mount_root}'")
+            except UiError:
+                continue
+            names = [line.strip() for line in names_output.splitlines() if line.strip()]
+            for name in names:
+                candidate = f"{mount_root}/{name}"
+                q = bash_single_quote(candidate)
+                result = ssh_probe_command(
+                    find_tool("ssh"), self._ssh_destination(), int(self.answers.get("ssh_port") or 22),
+                    f"test -f '{q}/appdaemon.yaml' || test -d '{q}/apps'", timeout=15,
+                )
+                if result.returncode == 0:
+                    candidates.append(candidate)
         choice = self.answers.get("addon_root_choice")
         if choice and 1 <= int(choice) <= len(candidates):
             selected = candidates[int(choice) - 1]
@@ -666,7 +663,7 @@ class InstallerSession:
         if selected is None:
             return {
                 "status": "warn",
-                "detail": "No AppDaemon config directory detected under /addon_configs — enter it manually "
+                "detail": "No AppDaemon config directory detected under /app_configs or /addon_configs — enter it manually "
                 "(e.g. /addon_configs/a0d7b954_appdaemon; https://github.com/hassio-addons/addon-appdaemon).",
                 "data": {"candidates": [], "selected": None},
             }

@@ -56,7 +56,7 @@ if ($FreshInstall -and $VerifyOnly) {
     throw '-FreshInstall applies a FIRST install; it cannot be combined with -VerifyOnly.'
 }
 
-if ($AddonConfigRoot -notmatch '^/addon_configs/[^/]+$') {
+if ($AddonConfigRoot -notmatch '^/(app_configs|addon_configs)/[A-Za-z0-9_-]+$') {
     throw "AddonConfigRoot must be one AppDaemon add-on config directory, not a broad path: $AddonConfigRoot"
 }
 

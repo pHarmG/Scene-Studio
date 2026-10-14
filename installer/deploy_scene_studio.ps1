@@ -147,7 +147,7 @@ if (-not $AddonConfigRoot) {
 if ($AddonConfigRoot -match 'REPLACE_ME') {
     throw (
         "appdaemon_config_root is still a placeholder ($AddonConfigRoot). Set the real AppDaemon " +
-        'add-on config directory (find the slug under /addon_configs) in the profile or pass -AddonConfigRoot.'
+        'add-on config directory (find the slug under /app_configs or /addon_configs) in the profile or pass -AddonConfigRoot.'
     )
 }
 
@@ -184,7 +184,7 @@ if ($LASTEXITCODE -ne 0) {
 if ($rootOutput -match 'addon_root=absent') {
     throw (
         "AppDaemon config root '$AddonConfigRoot' does not exist on '$HaHost'. The add-on slug is " +
-        'probably mistyped: find the exact directory on the HA host under /addon_configs (e.g. ' +
+        'probably mistyped: find the exact directory on the HA host under /app_configs or /addon_configs (e.g. ' +
         "'/addon_configs/a0d7b954_appdaemon') and fix appdaemon_config_root in the profile, or pass " +
         '-AddonConfigRoot. Nothing was written.'
     )

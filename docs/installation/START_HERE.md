@@ -110,7 +110,7 @@ python installer/ui/server.py
 
 The wizard asks for your Home Assistant address and token, then tries existing
 SSH access to that hostname. On a common HAOS/Supervised setup it finds the
-AppDaemon add-on under `/addon_configs`, checks HTTP on port 5050, and checks
+AppDaemon add-on under `/app_configs` (Terminal & SSH 10.5.0+) or `/addon_configs` (older SSH apps), checks HTTP on port 5050, and checks
 Supervisor restart capability. You see the detected setup and choose your
 lighting sources; no separate AppDaemon SSH service or hostname is needed.
 The wizard shows exactly what it will change and requires confirmation first.
@@ -173,3 +173,11 @@ Configuration option instead of editing `apps.yaml`.)
   (`/data`, which holds the rendered config and the store).
 - Detailed reference (manual profile, noninteractive answers file, rollback
   anatomy): [PORTABLE_INSTALL.md](PORTABLE_INSTALL.md) in this folder
+
+Terminal & SSH 10.5.0 renamed its SSH-visible `/addon_configs` mount to
+`/app_configs` and `/addons` to `/local_apps`. Both config mount names are
+supported by the wizards, deployment profiles, and deployers. Existing profiles
+and unattended answers must use the path exposed by their SSH endpoint; if the
+old path is absent, change only `appdaemon_config_root` to `/app_configs/<same slug>`.
+The installer fails before writing when a configured path is absent. This does
+not change AppDaemon-internal `/config` paths or Supervisor-owned installation.

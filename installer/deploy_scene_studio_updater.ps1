@@ -7,7 +7,7 @@ param([switch]$Apply, [string]$HaHost, [int]$SshPort = 0,
       [string]$AddonConfigRoot, [string]$HaUrl)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-if ($AddonConfigRoot -notmatch '^/addon_configs/[a-z0-9_]+$') { throw 'Invalid AppDaemon config root.' }
+if ($AddonConfigRoot -cnotmatch '^/(app_configs|addon_configs)/[a-z0-9_]+$') { throw 'Invalid AppDaemon config root.' }
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $files = @{
     'scene_studio_update_supervisor.py' = Join-Path $PSScriptRoot 'runtime/scene_studio_update_supervisor.py'

@@ -58,6 +58,40 @@ def test_multiple_candidates_require_selection(ui_env):
     assert ui_env.session.answers['appdaemon_config_root'].endswith('second_appdaemon')
 
 
+def test_new_ssh_config_mount_detected_read_only(ui_env):
+    (ui_env.state_dir / 'fs/addon_configs').rename(ui_env.state_dir / 'fs/app_configs')
+    ui_env.set_answers(appdaemon_config_root=None)
+    status, response = ui_env.client.post('/api/probe', {'names': ['appdaemon_root']})
+    assert status == 200
+    result = response['results']['appdaemon_root']
+    assert result['status'] == 'ok'
+    assert result['data']['selected'] == '/app_configs/fake_addon'
+    assert result['data']['candidates'] == ['/app_configs/fake_addon']
+    ui_env.assert_no_remote_writes()
+
+
+def test_stale_config_path_fails_read_only_after_ssh_update(ui_env):
+    (ui_env.state_dir / 'fs/addon_configs').rename(ui_env.state_dir / 'fs/app_configs')
+    ui_env.set_answers(appdaemon_config_root=ADDON_ROOT)
+    status, response = ui_env.client.post('/api/probe', {'names': ['appdaemon_root']})
+    assert status == 200
+    result = response['results']['appdaemon_root']
+    assert result['status'] == 'fail'
+    assert '/app_configs' in result['detail']
+    ui_env.assert_no_remote_writes()
+
+
+@pytest.mark.skipif(not HAS_PWSH, reason='Updater validation requires PowerShell 7')
+@pytest.mark.parametrize('root', ['/app_configs/InvalidSlug', '/app_configs/invalid-slug',
+                                 '/addon_configs/InvalidSlug', '/app_configs/..'])
+def test_updater_rejects_roots_unsupported_by_companion(root):
+    script = Path(__file__).resolve().parents[2] / 'installer/deploy_scene_studio_updater.ps1'
+    result = subprocess.run(['pwsh', '-NoProfile', '-File', str(script),
+                             '-AddonConfigRoot', root], capture_output=True, text=True, timeout=20)
+    assert result.returncode != 0
+    assert 'Invalid AppDaemon config root.' in result.stdout + result.stderr
+
+
 def test_custom_host_port_http_remain_independent(ui_env, monkeypatch):
     ui_env.set_answers(ssh_host='custom-files', ssh_user='operator', ssh_port=2228,
                        appdaemon_http_url='https://custom-http.example:8443')
